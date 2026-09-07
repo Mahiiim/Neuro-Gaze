@@ -19,7 +19,7 @@ Layout
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QSize, QTimer, QVariantAnimation
-from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut, QColor, QPainter, QBrush
+from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut, QColor, QPainter, QBrush, QPixmap, QImage
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -30,7 +30,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QFrame,
-    QMessageBox
+    QMessageBox,
+    QGraphicsDropShadowEffect,
 )
 
 from core.face_tracker import FaceTrackerWorker
@@ -246,11 +247,16 @@ class MainWindow(QMainWindow):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         body.addWidget(self._build_sidebar())
-        body.addWidget(self._build_pages(), 1)
+        self._pages_container = self._build_pages()
+        body.addWidget(self._pages_container, 1)
         outer.addLayout(body, 1)
 
         # Emergency stop bar
         outer.addWidget(self._build_emergency_bar())
+
+        # PiP camera overlay — parented to the pages container so it
+        # floats above page content but stays inside the workspace area.
+        self._build_pip_overlay()
 
     def _build_header(self) -> QFrame:
         frame = QFrame()
@@ -335,6 +341,87 @@ class MainWindow(QMainWindow):
         self._navigate(self.PAGE_DASHBOARD)
         return self._pages
 
+    # ── PiP camera overlay ───────────────────────────────────────
+
+    def _build_pip_overlay(self) -> None:
+        """Create the floating Picture-in-Picture camera preview."""
+        PIP_W, PIP_H = 260, 180  # container size (feed + telemetry)
+        FEED_W, FEED_H = 240, 135  # 16:9 camera feed
+
+        # Main PiP container — parented to the pages widget so it overlays
+        self._pip_container = QFrame(self._pages_container)
+        self._pip_container.setObjectName("pipContainer")
+        self._pip_container.setFixedSize(PIP_W, PIP_H)
+        self._pip_container.setStyleSheet(
+            f"QFrame#pipContainer {{"
+            f"  background-color: {BG_PANEL};"
+            f"  border: 2px solid {ACCENT_HOVER};"
+            f"  border-radius: 14px;"
+            f"}}"
+        )
+
+        # Drop-shadow effect
+        shadow = QGraphicsDropShadowEffect(self._pip_container)
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 8)
+        shadow.setColor(QColor(0, 0, 0, 153))  # rgba(0,0,0,0.6)
+        self._pip_container.setGraphicsEffect(shadow)
+
+        pip_layout = QVBoxLayout(self._pip_container)
+        pip_layout.setContentsMargins(10, 10, 10, 6)
+        pip_layout.setSpacing(4)
+
+        # Camera feed label
+        self._pip_cam_label = QLabel()
+        self._pip_cam_label.setFixedSize(FEED_W, FEED_H)
+        self._pip_cam_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._pip_cam_label.setStyleSheet(
+            "background: #0A1118; border-radius: 8px; border: none;"
+        )
+        pip_layout.addWidget(self._pip_cam_label, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Telemetry pill bar (EAR + face dot)
+        telemetry_row = QHBoxLayout()
+        telemetry_row.setContentsMargins(4, 0, 4, 0)
+        telemetry_row.setSpacing(6)
+
+        self._pip_face_dot = QLabel("●")
+        self._pip_face_dot.setFixedSize(18, 18)
+        self._pip_face_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._pip_face_dot.setStyleSheet(
+            f"color: {ACCENT_HOVER}; font-size: 12px; border: none;"
+        )
+        telemetry_row.addWidget(self._pip_face_dot)
+
+        self._pip_status_label = QLabel("FACE OK")
+        self._pip_status_label.setStyleSheet(
+            f"color: {ACCENT_HOVER}; font-size: 10px; font-weight: 600; border: none;"
+        )
+        telemetry_row.addWidget(self._pip_status_label)
+
+        telemetry_row.addStretch(1)
+
+        self._pip_ear_label = QLabel("EAR: —")
+        self._pip_ear_label.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-size: 10px; font-weight: 600;"
+            f" background: rgba(10,17,24,0.7); border-radius: 6px;"
+            f" padding: 2px 6px; border: none;"
+        )
+        telemetry_row.addWidget(self._pip_ear_label)
+
+        pip_layout.addLayout(telemetry_row)
+
+        # Face-lost flash timer
+        self._pip_face_ok = True
+        self._pip_border_visible = True
+        self._pip_flash_timer = QTimer(self)
+        self._pip_flash_timer.setInterval(500)
+        self._pip_flash_timer.timeout.connect(self._pip_flash_border)
+
+        # Start hidden (Dashboard is the default page)
+        self._pip_container.hide()
+        self._reposition_pip()
+
     def _build_emergency_bar(self) -> QWidget:
         bar = QWidget()
         bar.setFixedHeight(72)
@@ -405,7 +492,7 @@ class MainWindow(QMainWindow):
         )
 
     def _wire_tracker(self) -> None:
-        """Connect tracker signals to header status pills and pages."""
+        """Connect tracker signals to header status pills, pages, and PiP."""
         self._tracker.face_detected.connect(
             lambda ok: self._pill_face.set_ok(ok, "Detected" if ok else "Not Detected")
         )
@@ -423,6 +510,13 @@ class MainWindow(QMainWindow):
             lambda: self._pill_tracking.set_ok(False, "OFF")
         )
 
+        # ── Centralised frame routing ────────────────────────────
+        self._tracker.frame_ready.connect(self._dispatch_frame)
+
+        # ── PiP telemetry signals ────────────────────────────────
+        self._tracker.face_detected.connect(self._pip_on_face_detected)
+        self._tracker.ear_updated.connect(self._pip_on_ear_updated)
+
     # ── navigation ───────────────────────────────────────────────
 
     def _navigate(self, page_idx: int) -> None:
@@ -432,6 +526,17 @@ class MainWindow(QMainWindow):
             # Force style refresh
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+
+        # Toggle PiP visibility (guard needed: first _navigate call
+        # happens inside _build_pages before _build_pip_overlay runs)
+        if hasattr(self, '_pip_container'):
+            if page_idx == self.PAGE_DASHBOARD:
+                self._pip_container.hide()
+            else:
+                self._pip_container.show()
+                self._pip_container.raise_()  # ensure it's on top
+                self._reposition_pip()
+
         log.debug("Navigated to page %d", page_idx)
 
     # ── emergency stop ────────────────────────────────────────────
@@ -441,6 +546,94 @@ class MainWindow(QMainWindow):
         self._dashboard.on_external_stop()
         self._pill_tracking.set_ok(False, "STOPPED")
         log.warning("Emergency stop triggered from MainWindow")
+
+    # ── PiP frame routing and telemetry ───────────────────────────
+
+    def _dispatch_frame(self, image: QImage) -> None:
+        """Route each frame to the correct display target."""
+        if self._pages.currentIndex() == self.PAGE_DASHBOARD:
+            # Full-size rendering on Dashboard
+            pix = QPixmap.fromImage(image)
+            cam = self._dashboard.cam_label
+            scaled = pix.scaled(
+                cam.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            cam.setPixmap(scaled)
+        else:
+            # Compact PiP rendering
+            pix = QPixmap.fromImage(image)
+            scaled = pix.scaled(
+                self._pip_cam_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self._pip_cam_label.setPixmap(scaled)
+
+    def _pip_on_face_detected(self, detected: bool) -> None:
+        """Update the PiP border glow and face-status dot."""
+        self._pip_face_ok = detected
+        if detected:
+            self._pip_flash_timer.stop()
+            self._pip_container.setStyleSheet(
+                f"QFrame#pipContainer {{"
+                f"  background-color: {BG_PANEL};"
+                f"  border: 2px solid {ACCENT_HOVER};"
+                f"  border-radius: 14px;"
+                f"}}"
+            )
+            self._pip_face_dot.setStyleSheet(
+                f"color: {ACCENT_HOVER}; font-size: 12px; border: none;"
+            )
+            self._pip_status_label.setText("FACE OK")
+            self._pip_status_label.setStyleSheet(
+                f"color: {ACCENT_HOVER}; font-size: 10px; font-weight: 600; border: none;"
+            )
+        else:
+            self._pip_face_dot.setStyleSheet(
+                f"color: {DANGER}; font-size: 12px; border: none;"
+            )
+            self._pip_status_label.setText("FACE LOST")
+            self._pip_status_label.setStyleSheet(
+                f"color: {DANGER}; font-size: 10px; font-weight: 600; border: none;"
+            )
+            if not self._pip_flash_timer.isActive():
+                self._pip_border_visible = True
+                self._pip_flash_timer.start()
+
+    def _pip_flash_border(self) -> None:
+        """Toggle the PiP border between red and transparent for a flashing alert."""
+        self._pip_border_visible = not self._pip_border_visible
+        border_color = DANGER if self._pip_border_visible else "transparent"
+        self._pip_container.setStyleSheet(
+            f"QFrame#pipContainer {{"
+            f"  background-color: {BG_PANEL};"
+            f"  border: 2px solid {border_color};"
+            f"  border-radius: 14px;"
+            f"}}"
+        )
+
+    def _pip_on_ear_updated(self, ear: float) -> None:
+        """Update the EAR readout on the PiP telemetry pill."""
+        if ear > 0:
+            self._pip_ear_label.setText(f"EAR: {ear:.2f}")
+        else:
+            self._pip_ear_label.setText("EAR: —")
+
+    def _reposition_pip(self) -> None:
+        """Anchor the PiP container to the bottom-right of the pages area."""
+        parent = self._pages_container
+        margin = 16
+        x = parent.width() - self._pip_container.width() - margin
+        y = parent.height() - self._pip_container.height() - margin
+        self._pip_container.move(max(0, x), max(0, y))
+
+    def resizeEvent(self, event) -> None:
+        """Reposition PiP when the window is resized."""
+        super().resizeEvent(event)
+        if hasattr(self, '_pip_container'):
+            self._reposition_pip()
 
     def _trigger_patient_alert(self) -> None:
         log.warning("PATIENT EMERGENCY ALERT TRIGGERED!")

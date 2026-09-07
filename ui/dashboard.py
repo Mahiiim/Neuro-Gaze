@@ -82,6 +82,13 @@ class DashboardWidget(QWidget):
         self._build_ui()
         self._connect_tracker()
 
+    # ── public property for MainWindow frame routing ─────────────
+
+    @property
+    def cam_label(self) -> QLabel:
+        """Expose the camera QLabel so MainWindow can render frames to it."""
+        return self._cam_label
+
     # ── UI construction ─────────────────────────────────────────
 
     def _build_ui(self) -> None:
@@ -182,7 +189,8 @@ class DashboardWidget(QWidget):
     # ── tracker signal connections ───────────────────────────────
 
     def _connect_tracker(self) -> None:
-        self._tracker.frame_ready.connect(self._on_frame)
+        # NOTE: frame_ready is NOT connected here — MainWindow centralises
+        # frame routing to either this widget's cam_label or the PiP overlay.
         self._tracker.ear_updated.connect(self._on_ear)
         self._tracker.face_detected.connect(self._on_face_detected)
         self._tracker.blink_detected.connect(self._on_blink)
