@@ -1,6 +1,6 @@
-# NeuroVision
+# Neuro-Gaze
 
-**NeuroVision** is a professional **Eye-Controlled Assistive Communication System** built with Python and PySide6. It enables individuals with speech or motor impairments to control a computer and communicate using only head movements and eye blinks — no physical mouse or keyboard required.
+**Neuro-Gaze** is a professional **Eye-Controlled Assistive Communication System** built with Python and PySide6. It enables individuals with speech or motor impairments to control a computer and communicate using only head movements and eye blinks — no physical mouse or keyboard required.
 
 ---
 
@@ -22,7 +22,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  NEUROVISION  │ Eye-Controlled Assistive Communication      │
+│  Neuro-Gaze  │ Eye-Controlled Assistive Communication      │
 │  [Camera: ●] [Face: ●] [Tracking: ●] [Voice: ●]           │
 ├───────────┬──────────────────────────────────────────────────┤
 │ Dashboard │  Live webcam feed + EAR display + controls      │
@@ -40,11 +40,11 @@
 ## 📁 Project Structure
 
 ```
-NeuroVision/
+Neuro-Gaze/
 │
 ├── main.py                    # Entry point & startup sequence
 ├── requirements.txt
-├── NeuroVision.spec           # PyInstaller build spec
+├── Neuro-Gaze.spec           # PyInstaller build spec
 ├── README.md
 │
 ├── models/
@@ -71,7 +71,7 @@ NeuroVision/
 └── utils/
     ├── resource.py            # Path resolution (dev + PyInstaller)
     ├── config.py              # JSON config load/save/defaults
-    └── logger.py              # Rotating file logger → ~/.neurovision/app.log
+    └── logger.py              # Rotating file logger → ~/.Neuro-Gaze/app.log
 ```
 
 ---
@@ -89,8 +89,8 @@ NeuroVision/
 ### 1. Clone and set up
 
 ```bash
-git clone https://github.com/Mahiiim/NeuroVision.git
-cd NeuroVision
+git clone https://github.com/Mahiiim/Neuro-Gaze.git
+cd Neuro-Gaze
 python -m venv venv
 venv\Scripts\activate       # Windows
 pip install -r requirements.txt
@@ -121,10 +121,10 @@ On first launch, the MediaPipe model (`~3.5 MB`) will be downloaded automaticall
 
 ```bash
 pip install pyinstaller
-pyinstaller NeuroVision.spec
+pyinstaller Neuro-Gaze.spec
 ```
 
-The output will be in `dist/NeuroVision/NeuroVision.exe`.
+The output will be in `dist/Neuro-Gaze/Neuro-Gaze.exe`.
 
 > **Note:** First copy or pre-download `models/face_landmarker.task` before building, or the app will download it on first run.
 
@@ -132,7 +132,7 @@ The output will be in `dist/NeuroVision/NeuroVision.exe`.
 
 ## ⚙️ Configuration
 
-Settings are stored at `~/.neurovision/config.json` and can be changed in the **Settings** page:
+Settings are stored at `~/.Neuro-Gaze/config.json` and can be changed in the **Settings** page:
 
 - Blink threshold & click cooldown
 - X/Y sensitivity & cursor smoothing
@@ -169,7 +169,7 @@ Phrase / key press → pyttsx3.say()
 Application logs are written to:
 
 ```
-~/.neurovision/app.log
+~/.Neuro-Gaze/app.log
 ```
 
 ---
