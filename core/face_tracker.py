@@ -71,6 +71,7 @@ class FaceTrackerWorker(QThread):
         self._config = config
         self._running = False
         self._tracking_active = False  # mouse control on/off
+        self._fatigue_mode = False
         self._show_landmarks = True
         self._camera = CameraManager()
         self._mouse = MouseController()
@@ -145,8 +146,34 @@ class FaceTrackerWorker(QThread):
 
         log.info("FaceTrackerWorker loop started")
 
+        frame_times = []
+        current_res = "high"
+        high_res_w, high_res_h = cam_w, cam_h
+        low_res_w, low_res_h = 320, 240
+
         while self._running:
             success, frame = self._camera.read_frame()
+            
+            # FPS Tracking
+            now = time.time()
+            frame_times.append(now)
+            if len(frame_times) > 30:
+                frame_times.pop(0)
+                
+            fps = len(frame_times) / (frame_times[-1] - frame_times[0]) if len(frame_times) > 1 and frame_times[-1] != frame_times[0] else 30.0
+
+            # Dynamic resolution downscaling if struggling
+            if fps < 15 and current_res == "high" and len(frame_times) == 30:
+                log.warning("FPS dropped to %.1f, lowering camera resolution to save CPU", fps)
+                self._camera.set_resolution(low_res_w, low_res_h)
+                current_res = "low"
+                frame_times.clear() # Reset to avoid instant flapping
+            elif fps > 28 and current_res == "low" and len(frame_times) == 30:
+                log.info("FPS recovered to %.1f, restoring camera resolution", fps)
+                self._camera.set_resolution(high_res_w, high_res_h)
+                current_res = "high"
+                frame_times.clear()
+
             if not success or frame is None:
                 time.sleep(0.033)
                 continue
@@ -185,6 +212,9 @@ class FaceTrackerWorker(QThread):
 
                 # Blink → click
                 threshold = self._config.get("blink_threshold", 0.20)
+                if self._fatigue_mode:
+                    threshold *= 0.90  # 10% lower threshold if tired
+
                 if self._tracking_active and is_blink(ear, threshold):
                     clicked = self._mouse.try_click()
                     if clicked:
@@ -222,7 +252,9 @@ class FaceTrackerWorker(QThread):
             ),
             sensitivity_x=self._config.get("sensitivity_x", 1.0),
             sensitivity_y=self._config.get("sensitivity_y", 1.0),
+            fatigue_mode=self._config.get("fatigue_mode", False),
         )
+        self._fatigue_mode = self._config.get("fatigue_mode", False)
         self._show_landmarks = self._config.get("show_landmarks", True)
 
     def _create_detector(self) -> mp_vision.FaceLandmarker:

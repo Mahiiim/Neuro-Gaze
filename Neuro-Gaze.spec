@@ -1,14 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-NeuroVision.spec
+Neuro-Gaze.spec
 -----------------
-PyInstaller build specification for NeuroVision.
+PyInstaller build specification for Neuro-Gaze.
 
 Usage:
-    pyinstaller NeuroVision.spec
+    pyinstaller Neuro-Gaze.spec
 
 Output:
-    dist/NeuroVision/NeuroVision.exe   (one-folder build)
+    dist/Neuro-Gaze/Neuro-Gaze.exe   (one-folder build)
 
 Notes:
   - Uses one-folder mode for reliability (faster cold-start vs one-file)
@@ -70,7 +70,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="NeuroVision",
+    name="Neuro-Gaze",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -92,5 +92,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="NeuroVision",
+    name="Neuro-Gaze",
 )

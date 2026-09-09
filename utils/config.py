@@ -4,7 +4,7 @@ utils/config.py
 JSON-backed configuration system.
 
 All user-adjustable settings live here. On first launch the defaults are
-written to ~/.neurovision/config.json; subsequent launches load from that
+written to ~/.Neuro-Gaze/config.json; subsequent launches load from that
 file, so settings persist across sessions.
 
 Usage:
@@ -24,8 +24,7 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 # Where the config file lives
-_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".neurovision")
-_CONFIG_FILE = os.path.join(_CONFIG_DIR, "config.json")
+_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".Neuro-Gaze")
 
 # ──────────────────────────────────────────────────────────────
 #  Default values — every key that the application may read/write
@@ -51,8 +50,10 @@ DEFAULTS: dict[str, Any] = {
     "speech_rate": 150,
     "speech_volume": 1.0,
     "speech_voice_index": 0,
-    # Interface
-    "dark_mode": True,
+    # Interface / appearance
+    "theme": "dark",           # "dark", "light", or "high_contrast"
+    "ui_scale": "medium",      # "small", "medium", "large", "extra_large"
+    "dark_mode": True,         # legacy — kept for backward compat
     "show_landmarks": False,
     "show_tracking_info": True,
     # Quick phrases
@@ -75,12 +76,36 @@ class Config:
     Loads from disk on construction and writes back on :meth:`save`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, profile_name: str = "default") -> None:
         os.makedirs(_CONFIG_DIR, exist_ok=True)
+        self.profile_name = profile_name
         self._data: dict[str, Any] = dict(DEFAULTS)
         self._load()
 
     # ── public API ──────────────────────────────────────────────
+
+    def _get_config_path(self) -> str:
+        filename = "config.json" if self.profile_name == "default" else f"config_{self.profile_name}.json"
+        return os.path.join(_CONFIG_DIR, filename)
+
+    @staticmethod
+    def list_profiles() -> list[str]:
+        """Return a list of available profiles."""
+        os.makedirs(_CONFIG_DIR, exist_ok=True)
+        profiles = ["default"]
+        for f in os.listdir(_CONFIG_DIR):
+            if f.startswith("config_") and f.endswith(".json"):
+                name = f[7:-5]
+                if name:
+                    profiles.append(name)
+        return sorted(list(set(profiles)))
+
+    def switch_profile(self, profile_name: str) -> None:
+        """Switch to a new profile, saving the current one first."""
+        self.save()
+        self.profile_name = profile_name
+        self._data = dict(DEFAULTS)
+        self._load()
 
     def get(self, key: str, fallback: Any = None) -> Any:
         """Return the value for *key*, or *fallback* if not found."""
@@ -93,9 +118,10 @@ class Config:
     def save(self) -> None:
         """Persist current settings to disk."""
         try:
-            with open(_CONFIG_FILE, "w", encoding="utf-8") as fh:
+            path = self._get_config_path()
+            with open(path, "w", encoding="utf-8") as fh:
                 json.dump(self._data, fh, indent=2)
-            log.debug("Config saved to %s", _CONFIG_FILE)
+            log.debug("Config saved to %s", path)
         except OSError as exc:
             log.error("Failed to save config: %s", exc)
 
@@ -112,15 +138,16 @@ class Config:
     # ── private ─────────────────────────────────────────────────
 
     def _load(self) -> None:
-        if not os.path.exists(_CONFIG_FILE):
-            log.info("No config file found — using defaults")
+        path = self._get_config_path()
+        if not os.path.exists(path):
+            log.info("No config file found for profile %s — using defaults", self.profile_name)
             self.save()
             return
         try:
-            with open(_CONFIG_FILE, "r", encoding="utf-8") as fh:
+            with open(path, "r", encoding="utf-8") as fh:
                 stored: dict[str, Any] = json.load(fh)
             # Merge: stored values override defaults, missing keys get defaults
             self._data.update(stored)
-            log.debug("Config loaded from %s", _CONFIG_FILE)
+            log.debug("Config loaded from %s", path)
         except (OSError, json.JSONDecodeError) as exc:
             log.warning("Could not load config (%s) — using defaults", exc)

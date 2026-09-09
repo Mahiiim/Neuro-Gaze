@@ -1,192 +1,234 @@
 """
 ui/wheelchair.py
-----------------
-Wheelchair Drive Control module
+-----------------
+Implementation for ESP32-based wheelchair interface.
+Uses ui.theme for all styling.
 """
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Property
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QPushButton,
-    QLabel,
-    QFrame,
-    QSizePolicy
-)
-import json
+from __future__ import annotations
 
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QPainter, QColor
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+import json
+import threading
+import urllib.request
+import urllib.error
+
+from ui.components import DwellButton
+from ui.theme import T, S, theme_manager
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-# Constants
-ESP_IP = "http://192.168.4.1"
-POLL_INTERVAL = 130 # ms
 
-class DriveButton(QPushButton):
-    def __init__(self, text, command, parent=None):
-        super().__init__(text, parent)
-        self._command = command
-        self._is_stop = (command == "/S")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMinimumHeight(120)
-        
-        self.parent_widget = parent
-        
-        if self._is_stop:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: #E63946;
-                    color: white;
-                    border-radius: 20px;
-                    font-size: 28px;
-                    font-weight: bold;
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: rgba(255, 255, 255, 0.05);
-                    color: #00D2FF;
-                    border: 2px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 16px;
-                    font-size: 24px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: rgba(0, 210, 255, 0.15);
-                    border: 2px solid #00D2FF;
-                }
-            """)
+class DriveButton(DwellButton):
+    """Directional pad button for the wheelchair interface."""
 
-    def enterEvent(self, event):
+    gaze_left = Signal()
+    gaze_entered = Signal()
+
+    def __init__(self, text: str, is_stop: bool = False, parent=None) -> None:
+        # STOP gets 0ms dwell, others get 500ms
+        dwell = 0 if is_stop else 500
+        super().__init__(text, dwell_ms=dwell, parent=parent)
+        self.is_stop = is_stop
+        self.setMinimumHeight(S(100))
+        self._apply_style()
+
+    def enterEvent(self, event) -> None:
         super().enterEvent(event)
-        if self.parent_widget:
-            if self._is_stop:
-                self.parent_widget.trigger_stop()
-            else:
-                self.parent_widget.start_drive(self._command)
+        self.gaze_entered.emit()
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event) -> None:
         super().leaveEvent(event)
-        if self.parent_widget and not self._is_stop:
-            self.parent_widget.trigger_stop()
+        self.gaze_left.emit()
+
+    def _apply_style(self):
+        bg = T("DANGER") if self.is_stop else T("BG_KEY")
+        hover_bg = T("EMERGENCY_HOVER") if self.is_stop else T("ACCENT")
+        color = "white" if self.is_stop else T("TEXT_PRIMARY")
+        
+        self.setStyleSheet(f"""
+            DriveButton {{
+                background-color: {bg};
+                color: {color};
+                border: 2px solid {T("BORDER_SOLID")};
+                border-radius: {S(12)}px;
+                font-size: {S(18)}px;
+                font-weight: 800;
+            }}
+            DriveButton:hover {{
+                background-color: {hover_bg};
+                color: {T("KEY_HOVER_TEXT")};
+                border: 2px solid {hover_bg};
+            }}
+        """)
 
 
 class WheelchairWidget(QWidget):
-    def __init__(self, parent=None):
+    telemetry_updated = Signal(object)
+
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._net_manager = QNetworkAccessManager(self)
-        self._current_command = None
-        self._drive_timer = QTimer(self)
-        self._drive_timer.setInterval(POLL_INTERVAL)
-        self._drive_timer.timeout.connect(self._send_drive_pulse)
+        self._buttons = []
+        self._fails = 0
         
-        self._telemetry_timer = QTimer(self)
-        self._telemetry_timer.setInterval(1000)
-        self._telemetry_timer.timeout.connect(self._fetch_telemetry)
+        self._stop_timer = QTimer(self)
+        self._stop_timer.setSingleShot(True)
+        self._stop_timer.setInterval(250)
+        self._stop_timer.timeout.connect(lambda: self._drive("🛑 STOP"))
         
         self._build_ui()
-        self._telemetry_timer.start()
+        self._apply_theme()
+        theme_manager().theme_changed.connect(self._apply_theme)
+        
+        self.telemetry_updated.connect(self._on_telemetry_updated)
+        self._polling_timer = QTimer(self)
+        self._polling_timer.setInterval(200)
+        self._polling_timer.timeout.connect(self._poll_telemetry)
+        self._polling_timer.start()
 
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(20)
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(S(32), S(24), S(32), S(24))
+        outer.setSpacing(S(16))
 
-        # Telemetry Card
-        tel_card = QFrame()
-        tel_card.setStyleSheet("background: #1c2128; border-radius: 12px;")
-        tel_layout = QHBoxLayout(tel_card)
-        
-        self._front_lbl = QLabel("Front: -- cm")
-        self._front_lbl.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
-        self._front_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        self._rear_lbl = QLabel("Rear: -- cm")
-        self._rear_lbl.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
-        self._rear_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        tel_layout.addWidget(self._front_lbl)
-        tel_layout.addWidget(self._rear_lbl)
-        layout.addWidget(tel_card)
-        
-        # Drive Controls Grid
+        self._title = QLabel("🦽  Wheelchair Drive")
+        outer.addWidget(self._title)
+
+        self._hint = QLabel("Hover over a direction to drive. The chair stops automatically when you look away.")
+        outer.addWidget(self._hint)
+
+        # Telemetry Header
+        self._header_lbl = QLabel("Front: -- cm | Rear: -- cm")
+        self._header_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self._header_lbl)
+
+        # Drive pad
         grid = QGridLayout()
-        grid.setSpacing(16)
-        
-        self.btn_f = DriveButton("⬆ FORWARD", "/F", self)
-        self.btn_l = DriveButton("⬅ LEFT", "/L", self)
-        self.btn_s = DriveButton("🛑 STOP", "/S", self)
-        self.btn_r = DriveButton("➡ RIGHT", "/R", self)
-        self.btn_b = DriveButton("⬇ BACKWARD", "/B", self)
-        
-        grid.addWidget(self.btn_f, 0, 1)
-        grid.addWidget(self.btn_l, 1, 0)
-        grid.addWidget(self.btn_s, 1, 1)
-        grid.addWidget(self.btn_r, 1, 2)
-        grid.addWidget(self.btn_b, 2, 1)
-        
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
-        grid.setRowStretch(0, 1)
-        grid.setRowStretch(1, 1)
-        grid.setRowStretch(2, 1)
-        
-        layout.addLayout(grid, 1)
+        grid.setSpacing(S(12))
 
-    def start_drive(self, command):
-        self._current_command = command
-        self._drive_timer.start()
-        self._send_drive_pulse()
+        btn_fwd = self._make_btn("⬆️ FORWARD")
+        btn_rev = self._make_btn("⬇️ BACKWARD")
+        btn_left = self._make_btn("⬅️ LEFT")
+        btn_right = self._make_btn("➡️ RIGHT")
+        btn_stop = self._make_btn("🛑 STOP", is_stop=True)
 
-    def trigger_stop(self):
-        self._drive_timer.stop()
-        self._current_command = None
-        self._send_request("/S")
-        log.info("Wheelchair STOP sent")
+        grid.addWidget(btn_fwd, 0, 1)
+        grid.addWidget(btn_left, 1, 0)
+        grid.addWidget(btn_stop, 1, 1)
+        grid.addWidget(btn_right, 1, 2)
+        grid.addWidget(btn_rev, 2, 1)
 
-    def _send_drive_pulse(self):
-        if self._current_command:
-            self._send_request(self._current_command)
+        outer.addLayout(grid, 1)
 
-    def _send_request(self, endpoint):
-        req = QNetworkRequest(QUrl(f"{ESP_IP}{endpoint}"))
-        self._net_manager.get(req)
-        
-    def _fetch_telemetry(self):
-        req = QNetworkRequest(QUrl(f"{ESP_IP}/status"))
-        reply = self._net_manager.get(req)
-        reply.finished.connect(lambda r=reply: self._on_telemetry(r))
+        self._status = QLabel("Status: Idle")
+        outer.addWidget(self._status, alignment=Qt.AlignmentFlag.AlignCenter)
 
-    def _on_telemetry(self, reply: QNetworkReply):
-        if reply.error() == QNetworkReply.NetworkError.NoError:
+    def _make_btn(self, label: str, is_stop: bool = False) -> DriveButton:
+        btn = DriveButton(label, is_stop)
+        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        btn.clicked.connect(lambda checked, l=label: self._drive(l))
+        btn.gaze_entered.connect(self._stop_timer.stop)
+        btn.gaze_left.connect(self._stop_timer.start)
+        self._buttons.append(btn)
+        return btn
+
+    def _drive(self, direction: str) -> None:
+        cmd_map = {
+            "⬆️ FORWARD": "F",
+            "⬇️ BACKWARD": "B",
+            "⬅️ LEFT": "L",
+            "➡️ RIGHT": "R",
+            "🛑 STOP": "S"
+        }
+        cmd = cmd_map.get(direction, "S")
+        log.info("Wheelchair drive: %s (Command: %s)", direction, cmd)
+
+        if "STOP" in direction:
+            self._status.setText("Status: Stopped")
+        else:
+            self._status.setText(f"Status: Driving {direction.split(' ')[1]}")
+
+        def _send():
             try:
-                data = json.loads(reply.readAll().data().decode())
-                front = data.get("front", -1)
-                rear = data.get("rear", -1)
-                
-                self._update_sensor_lbl(self._front_lbl, "Front", front)
-                self._update_sensor_lbl(self._rear_lbl, "Rear", rear)
+                req = urllib.request.Request(f"http://192.168.4.1/{cmd}", method="GET")
+                with urllib.request.urlopen(req, timeout=0.5) as response:
+                    pass
             except Exception as e:
+                log.error("Drive command failed: %s", e)
+                
+        threading.Thread(target=_send, daemon=True).start()
+
+    def _poll_telemetry(self) -> None:
+        def _fetch():
+            data = None
+            try:
+                req = urllib.request.Request("http://192.168.4.1/status", method="GET")
+                with urllib.request.urlopen(req, timeout=0.15) as response:
+                    if response.getcode() == 200:
+                        data = json.loads(response.read().decode('utf-8'))
+            except Exception:
                 pass
-        reply.deleteLater()
-        
-    def _update_sensor_lbl(self, lbl, prefix, val):
-        if val < 0:
-            lbl.setText(f"{prefix}: -- cm")
-            lbl.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
+            
+            try:
+                self.telemetry_updated.emit(data)
+            except RuntimeError:
+                # Widget was deleted during app shutdown
+                pass
+                
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _on_telemetry_updated(self, data) -> None:
+        if data is None:
+            self._fails += 1
+            if self._fails >= 3:
+                self._header_lbl.setText("Front: -- cm | Rear: -- cm")
+                self._header_lbl.setStyleSheet(f"color: {T('TEXT_MUTED')}; font-size: {S(16)}px; font-weight: 700; border: none;")
             return
             
-        lbl.setText(f"{prefix}: {val} cm")
-        if val < 35:
-            lbl.setStyleSheet("color: #FF4757; font-size: 20px; font-weight: bold;")
-        elif val <= 80:
-            lbl.setStyleSheet("color: #FFA502; font-size: 20px; font-weight: bold;")
+        self._fails = 0
+        front = data.get("front", 999)
+        rear = data.get("rear", 999)
+        
+        front_txt = f"{front} cm" if front <= 400 else "Clear (>100 cm)"
+        rear_txt = f"{rear} cm" if rear <= 400 else "Clear (>100 cm)"
+        
+        min_dist = min(front, rear)
+        
+        if min_dist <= 30:
+            color = T("DANGER")
+            self._header_lbl.setText(f"Front: {front_txt} | Rear: {rear_txt}   ⚠️ OBSTACLE CLOSE")
+        elif min_dist <= 60:
+            color = T("WARNING")
+            self._header_lbl.setText(f"Front: {front_txt} | Rear: {rear_txt}")
         else:
-            lbl.setStyleSheet("color: #2ED573; font-size: 20px; font-weight: bold;")
+            color = "#00B4D8"
+            self._header_lbl.setText(f"Front: {front_txt} | Rear: {rear_txt}")
+            
+        self._header_lbl.setStyleSheet(f"color: {color}; font-size: {S(18)}px; font-weight: 800; border: 2px solid {color}; padding: {S(10)}px; border-radius: {S(8)}px;")
+
+    def _apply_theme(self) -> None:
+        self._title.setStyleSheet(
+            f"color:{T('TEXT_PRIMARY')}; font-size:{S(20)}px; font-weight:700;"
+        )
+        self._hint.setStyleSheet(f"color:{T('TEXT_MUTED')}; font-size:{S(13)}px;")
+        self._status.setStyleSheet(
+            f"color:{T('ACCENT')}; font-size:{S(14)}px; font-weight:600;"
+        )
+        if self._fails >= 3:
+            self._header_lbl.setStyleSheet(f"color: {T('TEXT_MUTED')}; font-size: {S(16)}px; font-weight: 700; border: none;")
+            
+        for btn in self._buttons:
+            btn._apply_style()
 

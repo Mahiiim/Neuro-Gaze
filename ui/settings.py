@@ -28,109 +28,106 @@ from PySide6.QtWidgets import (
     QWidget,
     QCheckBox,
     QGroupBox,
+    QLineEdit,
+    QInputDialog,
+    QMessageBox,
 )
 
 from core.face_tracker import FaceTrackerWorker
 from core.camera import CameraManager
 from core.speech_engine import SpeechEngine
+from core.webhook import CaregiverNotifier
+from ui.components import DwellButton
+from ui.theme import T, S, theme_manager, set_theme, set_scale
 from utils.config import Config
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-BG_DARK = "#0d1117"
-BG_PANEL = "#161b22"
-BG_CARD = "#1c2128"
-ACCENT = "#00b4ff"
-TEXT_PRIMARY = "#e6edf3"
-TEXT_MUTED = "#8b949e"
-BORDER = "#30363d"
-SUCCESS = "#3fb950"
-DANGER = "#f85149"
 
-_GROUP_STYLE = f"""
+def _group_style() -> str:
+    return f"""
 QGroupBox {{
-    color: {ACCENT};
-    font-size: 13px;
+    color: {T("ACCENT")};
+    font-size: {S(13)}px;
     font-weight: 700;
-    border: 1px solid {BORDER};
-    border-radius: 10px;
-    margin-top: 14px;
-    padding: 12px;
-    background: {BG_CARD};
+    border: 1px solid {T("BORDER_SOLID")};
+    border-radius: {S(10)}px;
+    margin-top: {S(14)}px;
+    padding: {S(12)}px;
+    background: {T("BG_CARD")};
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 10px;
-    left: 12px;
+    padding: 0 {S(10)}px;
+    left: {S(12)}px;
 }}
 QLabel {{
-    color: {TEXT_PRIMARY};
-    font-size: 12px;
+    color: {T("TEXT_PRIMARY")};
+    font-size: {S(12)}px;
 }}
 QDoubleSpinBox, QSpinBox, QComboBox {{
-    background: {BG_PANEL};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
-    padding: 4px 8px;
-    min-height: 28px;
-    font-size: 12px;
+    background: {T("BG_PANEL")};
+    color: {T("TEXT_PRIMARY")};
+    border: 1px solid {T("BORDER_SOLID")};
+    border-radius: {S(6)}px;
+    padding: {S(4)}px {S(8)}px;
+    min-height: {S(28)}px;
+    font-size: {S(12)}px;
+}}
+QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {{
+    border: 1px solid {T("ACCENT")};
 }}
 QSlider::groove:horizontal {{
-    height: 6px;
-    background: {BORDER};
-    border-radius: 3px;
+    height: {S(6)}px;
+    background: {T("BORDER_SOLID")};
+    border-radius: {S(3)}px;
 }}
 QSlider::handle:horizontal {{
-    background: {ACCENT};
-    width: 16px;
-    height: 16px;
-    margin: -5px 0;
-    border-radius: 8px;
+    background: {T("ACCENT")};
+    width: {S(16)}px;
+    height: {S(16)}px;
+    margin: -{S(5)}px 0;
+    border-radius: {S(8)}px;
 }}
 QSlider::sub-page:horizontal {{
-    background: {ACCENT};
-    border-radius: 3px;
+    background: {T("ACCENT")};
+    border-radius: {S(3)}px;
 }}
 QCheckBox {{
-    color: {TEXT_PRIMARY};
-    font-size: 12px;
+    color: {T("TEXT_PRIMARY")};
+    font-size: {S(12)}px;
 }}
 """
 
-_BTN_APPLY = f"""
+def _btn_apply() -> str:
+    return f"""
 QPushButton {{
-    background: {ACCENT};
-    color: #0d1117;
+    background: {T("ACCENT")};
+    color: {T("KEY_HOVER_TEXT")};
     border: none;
-    border-radius: 8px;
-    padding: 10px 32px;
-    font-size: 13px;
+    border-radius: {S(8)}px;
+    padding: {S(10)}px {S(32)}px;
+    font-size: {S(13)}px;
     font-weight: 700;
 }}
-QPushButton:hover {{ background: #33c6ff; }}
+QPushButton:hover {{ background: {T("APPLY_HOVER")}; }}
 """
 
-_BTN_RESET = f"""
+def _btn_reset() -> str:
+    return f"""
 QPushButton {{
-    background: {BG_PANEL};
-    color: {DANGER};
-    border: 1px solid {DANGER};
-    border-radius: 8px;
-    padding: 10px 32px;
-    font-size: 13px;
+    background: {T("BG_PANEL")};
+    color: {T("DANGER")};
+    border: 1px solid {T("DANGER")};
+    border-radius: {S(8)}px;
+    padding: {S(10)}px {S(32)}px;
+    font-size: {S(13)}px;
     font-weight: 600;
 }}
-QPushButton:hover {{ background: {DANGER}; color: white; }}
+QPushButton:hover {{ background: {T("DANGER")}; color: white; }}
 """
-
-
-def _label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
-    return lbl
 
 
 class SettingsWidget(QWidget):
@@ -148,7 +145,16 @@ class SettingsWidget(QWidget):
         self._tracker = tracker
         self._speech = speech
         self._controls: dict[str, Any] = {}
+        self._labels: list[QLabel] = []
         self._build_ui()
+        self._apply_theme()
+        theme_manager().theme_changed.connect(self._apply_theme)
+
+    def _label(self, text: str) -> QLabel:
+        """Helper to create a themed label and track it."""
+        lbl = QLabel(text)
+        self._labels.append(lbl)
+        return lbl
 
     # ── UI construction ─────────────────────────────────────────
 
@@ -158,52 +164,147 @@ class SettingsWidget(QWidget):
         outer.setSpacing(0)
 
         # Scrollable area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{BG_DARK}; }}")
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
 
-        inner = QWidget()
-        inner.setStyleSheet(_GROUP_STYLE)
-        layout = QVBoxLayout(inner)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(16)
+        self._inner = QWidget()
+        layout = QVBoxLayout(self._inner)
+        layout.setContentsMargins(S(24), S(20), S(24), S(20))
+        layout.setSpacing(S(16))
 
-        title = QLabel("⚙️  Settings")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:20px; font-weight:700; background:transparent;"
-        )
-        layout.addWidget(title)
+        self._title = QLabel("⚙️  Settings")
+        layout.addWidget(self._title)
 
+        layout.addWidget(self._build_profile_group())
+        layout.addWidget(self._build_appearance_group())
         layout.addWidget(self._build_eye_group())
         layout.addWidget(self._build_camera_group())
         layout.addWidget(self._build_speech_group())
         layout.addWidget(self._build_interface_group())
+        layout.addWidget(self._build_connectivity_group())
         layout.addStretch(1)
 
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
-        btn_apply = QPushButton("✓  Apply")
-        btn_apply.setStyleSheet(_BTN_APPLY)
-        btn_apply.clicked.connect(self._apply)
+        self._btn_apply_w = DwellButton("✓  Apply", dwell_ms=1000)
+        self._btn_apply_w.clicked.connect(self._apply)
 
-        btn_reset = QPushButton("↺  Reset to Defaults")
-        btn_reset.setStyleSheet(_BTN_RESET)
-        btn_reset.clicked.connect(self._reset)
+        self._btn_reset_w = DwellButton("↺  Reset to Defaults", dwell_ms=1000)
+        self._btn_reset_w.clicked.connect(self._reset)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"color:{SUCCESS}; font-size:12px;")
 
-        btn_row.addWidget(btn_apply)
-        btn_row.addWidget(btn_reset)
+        btn_row.addWidget(self._btn_apply_w)
+        btn_row.addWidget(self._btn_reset_w)
         btn_row.addWidget(self._status_lbl)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
 
-        scroll.setWidget(inner)
-        outer.addWidget(scroll)
+        self._scroll.setWidget(self._inner)
+        outer.addWidget(self._scroll)
 
     # ── groups ───────────────────────────────────────────────────
+
+    def _build_profile_group(self) -> QGroupBox:
+        grp = QGroupBox("👥  Patient Profiles")
+        g = QGridLayout(grp)
+        g.setSpacing(10)
+        g.setColumnMinimumWidth(0, 180)
+
+        g.addWidget(self._label("Active Profile"), 0, 0)
+        
+        row = QHBoxLayout()
+        self._profile_combo = QComboBox()
+        self._refresh_profile_combo()
+        self._profile_combo.currentTextChanged.connect(self._on_profile_changed)
+        row.addWidget(self._profile_combo, 1)
+        
+        btn_new = QPushButton("New Profile")
+        btn_new.setStyleSheet(f"background: {T('BG_PANEL')}; color: {T('TEXT_PRIMARY')}; border: 1px solid {T('BORDER_SOLID')}; border-radius: {S(6)}px; padding: {S(4)}px {S(12)}px; font-size: {S(12)}px;")
+        btn_new.clicked.connect(self._create_new_profile)
+        row.addWidget(btn_new)
+        
+        g.addLayout(row, 0, 1)
+        return grp
+
+    def _refresh_profile_combo(self):
+        self._profile_combo.blockSignals(True)
+        self._profile_combo.clear()
+        for p in Config.list_profiles():
+            self._profile_combo.addItem(p)
+        self._profile_combo.setCurrentText(self._config.profile_name)
+        self._profile_combo.blockSignals(False)
+
+    def _on_profile_changed(self, profile_name: str):
+        if not profile_name or profile_name == self._config.profile_name:
+            return
+        self._config.switch_profile(profile_name)
+        # Reload the whole settings UI to reflect new profile values
+        self._reset(force_reload=True)
+        self._status_lbl.setText(f"✓ Switched to profile: {profile_name}")
+        self._status_lbl.setStyleSheet(f"color:{T('SUCCESS')}; font-size:{S(12)}px;")
+
+    def _create_new_profile(self):
+        text, ok = QInputDialog.getText(self, "New Profile", "Enter patient profile name (e.g. john):", QLineEdit.EchoMode.Normal, "")
+        if ok and text.strip():
+            name = text.strip().lower().replace(" ", "_")
+            if name in Config.list_profiles():
+                QMessageBox.warning(self, "Error", "Profile already exists.")
+                return
+            self._config.switch_profile(name)
+            self._refresh_profile_combo()
+            self._reset(force_reload=True)
+            self._status_lbl.setText(f"✓ Created profile: {name}")
+            self._status_lbl.setStyleSheet(f"color:{T('SUCCESS')}; font-size:{S(12)}px;")
+
+    def _build_appearance_group(self) -> QGroupBox:
+        grp = QGroupBox("🎨  Appearance")
+        g = QGridLayout(grp)
+        g.setSpacing(10)
+        g.setColumnMinimumWidth(0, 180)
+
+        g.addWidget(self._label("Theme"), 0, 0)
+        theme_combo = QComboBox()
+        theme_combo.addItem("Dark", "dark")
+        theme_combo.addItem("Light", "light")
+        theme_combo.addItem("High Contrast", "high_contrast")
+        
+        # Set initial value
+        current_theme = self._config.get("theme", "dark")
+        idx = theme_combo.findData(current_theme)
+        if idx >= 0:
+            theme_combo.setCurrentIndex(idx)
+            
+        # Live preview hook
+        theme_combo.currentIndexChanged.connect(
+            lambda i: set_theme(theme_combo.itemData(i))
+        )
+            
+        g.addWidget(theme_combo, 0, 1)
+        self._controls["theme"] = theme_combo
+
+        g.addWidget(self._label("UI Scale"), 1, 0)
+        scale_combo = QComboBox()
+        scale_combo.addItem("Small", "small")
+        scale_combo.addItem("Medium (Default)", "medium")
+        scale_combo.addItem("Large", "large")
+        scale_combo.addItem("Extra Large", "extra_large")
+        
+        current_scale = self._config.get("ui_scale", "medium")
+        s_idx = scale_combo.findData(current_scale)
+        if s_idx >= 0:
+            scale_combo.setCurrentIndex(s_idx)
+            
+        # Live preview hook
+        scale_combo.currentIndexChanged.connect(
+            lambda i: set_scale(scale_combo.itemData(i))
+        )
+        
+        g.addWidget(scale_combo, 1, 1)
+        self._controls["ui_scale"] = scale_combo
+
+        return grp
 
     def _build_eye_group(self) -> QGroupBox:
         grp = QGroupBox("👁️  Eye Tracking")
@@ -217,6 +318,13 @@ class SettingsWidget(QWidget):
         self._add_dspin(g, 3, "Smoothing Max Alpha", "smoothing_alpha_max", 0.05, 1.0, 2, 0.05)
         self._add_dspin(g, 4, "Sensitivity X", "sensitivity_x", 0.5, 5.0, 2, 0.1)
         self._add_dspin(g, 5, "Sensitivity Y", "sensitivity_y", 0.5, 5.0, 2, 0.1)
+        
+        g.addWidget(self._label("Fatigue Mode (Extra Smoothing)"), 6, 0)
+        chk_fm = QCheckBox()
+        chk_fm.setChecked(self._config.get("fatigue_mode", False))
+        g.addWidget(chk_fm, 6, 1)
+        self._controls["fatigue_mode"] = chk_fm
+        
         return grp
 
     def _build_camera_group(self) -> QGroupBox:
@@ -226,7 +334,7 @@ class SettingsWidget(QWidget):
         g.setColumnMinimumWidth(0, 180)
 
         # Camera index dropdown
-        g.addWidget(_label("Camera"), 0, 0)
+        g.addWidget(self._label("Camera"), 0, 0)
         cam_combo = QComboBox()
         available = CameraManager.list_cameras()
         for idx in available:
@@ -246,7 +354,7 @@ class SettingsWidget(QWidget):
         g.setSpacing(10)
         g.setColumnMinimumWidth(0, 180)
 
-        g.addWidget(_label("Voice"), 0, 0)
+        g.addWidget(self._label("Voice"), 0, 0)
         voice_combo = QComboBox()
         for name in self._speech.voice_names:
             voice_combo.addItem(name)
@@ -265,17 +373,42 @@ class SettingsWidget(QWidget):
         g.setSpacing(10)
         g.setColumnMinimumWidth(0, 180)
 
-        g.addWidget(_label("Show Landmarks"), 0, 0)
+        g.addWidget(self._label("Show Landmarks"), 0, 0)
         chk_lm = QCheckBox()
         chk_lm.setChecked(self._config.get("show_landmarks", True))
         g.addWidget(chk_lm, 0, 1)
         self._controls["show_landmarks"] = chk_lm
 
-        g.addWidget(_label("Show Tracking Info"), 1, 0)
+        g.addWidget(self._label("Show Tracking Info"), 1, 0)
         chk_ti = QCheckBox()
         chk_ti.setChecked(self._config.get("show_tracking_info", True))
         g.addWidget(chk_ti, 1, 1)
         self._controls["show_tracking_info"] = chk_ti
+
+        return grp
+
+    def _build_connectivity_group(self) -> QGroupBox:
+        grp = QGroupBox("🌐  Connectivity")
+        g = QGridLayout(grp)
+        g.setSpacing(10)
+        g.setColumnMinimumWidth(0, 180)
+
+        g.addWidget(self._label("Caregiver Webhook URL"), 0, 0)
+        
+        row = QHBoxLayout()
+        webhook_edit = QLineEdit()
+        webhook_edit.setPlaceholderText("https://discord.com/api/webhooks/...")
+        webhook_edit.setText(self._config.get("webhook_url", ""))
+        webhook_edit.setStyleSheet(f"background: {T('BG_PANEL')}; color: {T('TEXT_PRIMARY')}; border: 1px solid {T('BORDER_SOLID')}; border-radius: {S(6)}px; padding: {S(4)}px {S(8)}px; min-height: {S(28)}px; font-size: {S(12)}px;")
+        self._controls["webhook_url"] = webhook_edit
+        row.addWidget(webhook_edit, 1)
+
+        btn_test = QPushButton("Test Ping")
+        btn_test.setStyleSheet(f"background: {T('BG_PANEL')}; color: {T('TEXT_PRIMARY')}; border: 1px solid {T('BORDER_SOLID')}; border-radius: {S(6)}px; padding: {S(4)}px {S(12)}px; font-size: {S(12)}px;")
+        btn_test.clicked.connect(lambda: CaregiverNotifier.send_webhook(webhook_edit.text(), "This is a test ping from Neuro-Gaze.", is_emergency=False))
+        row.addWidget(btn_test)
+
+        g.addLayout(row, 0, 1)
 
         return grp
 
@@ -292,7 +425,7 @@ class SettingsWidget(QWidget):
         decimals: int,
         step: float,
     ) -> None:
-        grid.addWidget(_label(label), row, 0)
+        grid.addWidget(self._label(label), row, 0)
         spin = QDoubleSpinBox()
         spin.setRange(min_val, max_val)
         spin.setDecimals(decimals)
@@ -311,7 +444,7 @@ class SettingsWidget(QWidget):
         max_val: int,
         step: int,
     ) -> None:
-        grid.addWidget(_label(label), row, 0)
+        grid.addWidget(self._label(label), row, 0)
         spin = QSpinBox()
         spin.setRange(min_val, max_val)
         spin.setSingleStep(step)
@@ -320,6 +453,23 @@ class SettingsWidget(QWidget):
         self._controls[key] = spin
 
     # ── apply / reset ────────────────────────────────────────────
+
+    def _apply_theme(self) -> None:
+        self._scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{T('BG_DARK')}; }}")
+        self._inner.setStyleSheet(_group_style())
+        self._title.setStyleSheet(
+            f"color:{T('TEXT_PRIMARY')}; font-size:{S(20)}px; font-weight:700; background:transparent;"
+        )
+        for lbl in self._labels:
+            lbl.setStyleSheet(f"color:{T('TEXT_MUTED')}; font-size:{S(12)}px;")
+        
+        self._btn_apply_w.setStyleSheet(_btn_apply())
+        self._btn_reset_w.setStyleSheet(_btn_reset())
+        
+        if "Settings saved" in self._status_lbl.text():
+            self._status_lbl.setStyleSheet(f"color:{T('SUCCESS')}; font-size:{S(12)}px;")
+        else:
+            self._status_lbl.setStyleSheet(f"color:{T('WARNING')}; font-size:{S(12)}px;")
 
     def _apply(self) -> None:
         """Read all controls and push values into config + tracker."""
@@ -334,10 +484,16 @@ class SettingsWidget(QWidget):
                 elif key == "speech_voice_index":
                     self._config.set(key, widget.currentIndex())
                     self._speech.set_voice_by_index(widget.currentIndex())
+                elif key == "theme":
+                    self._config.set(key, widget.currentData())
+                elif key == "ui_scale":
+                    self._config.set(key, widget.currentData())
                 else:
                     self._config.set(key, widget.currentText())
             elif isinstance(widget, QCheckBox):
                 self._config.set(key, widget.isChecked())
+            elif isinstance(widget, QLineEdit):
+                self._config.set(key, widget.text().strip())
 
         # Apply speech settings immediately
         self._speech.set_rate(self._config.get("speech_rate", 150))
@@ -349,10 +505,13 @@ class SettingsWidget(QWidget):
 
         self._config.save()
         self._status_lbl.setText("✓ Settings saved")
+        self._status_lbl.setStyleSheet(f"color:{T('SUCCESS')}; font-size:{S(12)}px;")
         log.info("Settings applied and saved")
 
-    def _reset(self) -> None:
-        self._config.reset_to_defaults()
+    def _reset(self, force_reload=False) -> None:
+        if not force_reload:
+            self._config.reset_to_defaults()
+            
         # Reload controls with new values
         for key, widget in self._controls.items():
             val = self._config.get(key)
@@ -364,5 +523,12 @@ class SettingsWidget(QWidget):
                 widget.setValue(int(val))
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(bool(val))
+            elif isinstance(widget, QComboBox):
+                if key in ("theme", "ui_scale"):
+                    idx = widget.findData(val)
+                    if idx >= 0:
+                        widget.setCurrentIndex(idx)
+                    
         self._status_lbl.setText("↺ Defaults restored")
+        self._status_lbl.setStyleSheet(f"color:{T('WARNING')}; font-size:{S(12)}px;")
         log.info("Settings reset to defaults")

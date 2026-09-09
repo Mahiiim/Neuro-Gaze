@@ -18,11 +18,11 @@ import sys
 import os
 
 # pyrefly: ignore [missing-import]
-from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
+from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog, QSplashScreen
 # pyrefly: ignore [missing-import]
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, Signal
 # pyrefly: ignore [missing-import]
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QPixmap
 
 from utils.logger import get_logger
 from utils.config import Config
@@ -30,126 +30,118 @@ from core.camera import is_model_available, download_model
 from core.face_tracker import FaceTrackerWorker
 from core.speech_engine import SpeechEngine
 from ui.main_window import MainWindow
+from ui.theme import set_theme, set_scale
 
 log = get_logger("main")
 
-
-def _ensure_model(app: QApplication) -> bool:
-    """
-    Check for the MediaPipe model. If absent, show a progress dialog and
-    download it. Returns True on success, False on failure.
-    """
-    if is_model_available():
-        log.info("Model found — skipping download")
-        return True
-
-    log.info("Model not found — starting download")
-
-    progress = QProgressDialog(
-        "Downloading MediaPipe Face Landmarker model…\n"
-        "This is a one-time download (~3.5 MB). Please wait.",
-        "Cancel",
-        0,
-        100,
-    )
-    progress.setWindowTitle("Neuro-Gaze — First Run Setup")
-    progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-    progress.setMinimumWidth(460)
-    progress.setValue(0)
-    progress.show()
-    app.processEvents()
-
-    cancelled = [False]
-
-    def on_progress(downloaded: int, total: int) -> None:
-        if progress.wasCanceled():
-            cancelled[0] = True
-            return
-        if total > 0:
-            pct = int(min(downloaded / total * 100, 100))
-        else:
-            # Unknown total — pulse
-            pct = min(progress.value() + 1, 99)
-        progress.setValue(pct)
-        app.processEvents()
-
-    success = download_model(progress_callback=on_progress)
-    progress.close()
-
-    if cancelled[0]:
-        QMessageBox.warning(
-            None,
-            "Download Cancelled",
-            "The model download was cancelled.\n"
-            "Neuro-Gaze cannot run without the face tracking model.",
-        )
-        return False
-
-    if not success:
-        QMessageBox.critical(
-            None,
-            "Download Failed",
-            "Failed to download the face tracking model.\n\n"
-            "Please check your internet connection and restart the application.\n"
-            f"Log file: ~/.neuro-gaze/app.log",
-        )
-        return False
-
-    progress.setValue(100)
-    log.info("Model download complete")
-    return True
-
-
 def main() -> int:
-    # ── Qt application ──────────────────────────────────────────
+    try:
+        import ctypes
+        myappid = 'neurogaze.assistive.system.1.0'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
     app.setApplicationName("Neuro-Gaze")
     app.setApplicationDisplayName("Neuro-Gaze")
     app.setApplicationVersion("2.0")
+    
+    from PySide6.QtGui import QIcon
+    app.setWindowIcon(QIcon("assets/app_icon.ico"))
 
     # Global font
     font = QFont("Segoe UI", 10)
     app.setFont(font)
 
-    # ── Configuration ───────────────────────────────────────────
-    log.info("Neuro-Gaze starting — version 2.0")
-    config = Config()
-    log.info("Configuration loaded")
+    from ui.splash import AnimatedSplashScreen
+    splash = AnimatedSplashScreen()
+    splash.show()
 
-    # ── Model check / download ──────────────────────────────────
-    if not _ensure_model(app):
-        return 1
+    window_holder = []
+    
+    class InitWorker(QThread):
+        progress_updated = Signal(str, int)
+        init_finished = Signal(object, object, object) # config, speech, tracker
+        init_failed = Signal(str)
 
-    # ── Speech engine ───────────────────────────────────────────
-    try:
-        speech = SpeechEngine()
-        speech.set_rate(config.get("speech_rate", 150))
-        speech.set_volume(config.get("speech_volume", 1.0))
-        speech.set_voice_by_index(config.get("speech_voice_index", 0))
-        log.info("Speech engine initialised")
-    except Exception as exc:
-        log.error("Speech engine failed: %s", exc)
-        QMessageBox.warning(
-            None,
-            "Speech Warning",
-            f"Text-to-speech could not be initialised:\n{exc}\n\n"
-            "The application will run without speech.",
-        )
-        speech = SpeechEngine()  # still construct so the UI doesn't crash
+        def run(self):
+            import time
+            self.progress_updated.emit("Initializing MediaPipe Ocular Pipeline...", 10)
+            time.sleep(0.5)
+            
+            # Load config
+            config = Config()
+            
+            # Download model
+            if not is_model_available():
+                self.progress_updated.emit("Downloading MediaPipe Face Landmarker model...", 15)
+                def on_progress(downloaded: int, total: int) -> None:
+                    if total > 0:
+                        pct = int(min(downloaded / total * 30, 30))
+                    else:
+                        pct = 15
+                    self.progress_updated.emit("Downloading MediaPipe Face Landmarker model...", 15 + pct)
+                
+                success = download_model(progress_callback=on_progress)
+                if not success:
+                    self.init_failed.emit("Failed to download the face tracking model.")
+                    return
 
-    # ── Face tracker (QThread) ──────────────────────────────────
-    tracker = FaceTrackerWorker(config)
+            self.progress_updated.emit("Establishing Hotspot Link (192.168.4.1)...", 50)
+            time.sleep(0.5)
+            
+            self.progress_updated.emit("Calibrating Real-Time Ear & Landmark Engine...", 70)
+            
+            # Speech engine
+            try:
+                speech = SpeechEngine()
+                speech.set_rate(config.get("speech_rate", 150))
+                speech.set_volume(config.get("speech_volume", 1.0))
+                speech.set_voice_by_index(config.get("speech_voice_index", 0))
+            except Exception as exc:
+                log.error("Speech engine failed: %s", exc)
+                speech = SpeechEngine()
+                
+            self.progress_updated.emit("Calibrating Real-Time Ear & Landmark Engine...", 85)
+            
+            # Face tracker
+            tracker = FaceTrackerWorker(config)
+            
+            time.sleep(0.5)
+            self.progress_updated.emit("System Ready", 100)
+            time.sleep(0.2)
+            
+            self.init_finished.emit(config, speech, tracker)
 
-    # ── Main window ─────────────────────────────────────────────
-    window = MainWindow(config, tracker, speech)
-    window.show()
+    worker = InitWorker()
+    worker.progress_updated.connect(splash.update_progress)
+    
+    def on_init_finished(config, speech, tracker):
+        set_theme(config.get("theme", "dark"))
+        set_scale(config.get("ui_scale", "medium"))
+        
+        window = MainWindow(config, tracker, speech)
+        window_holder.append(window)
+        
+        def show_main():
+            window.show()
+            tracker.start()
+            splash.close()
+            
+        splash.fade_out(show_main)
 
-    # ── Start tracker thread ────────────────────────────────────
-    # The camera opens inside the thread; any error is reported via signal
-    tracker.start()
-    log.info("Tracker thread started")
+    def on_init_failed(error_msg):
+        QMessageBox.critical(None, "Startup Failed", error_msg)
+        app.quit()
+        
+    worker.init_finished.connect(on_init_finished)
+    worker.init_failed.connect(on_init_failed)
+    
+    # Need to keep reference to worker
+    window_holder.append(worker)
+    worker.start()
 
-    # ── Event loop ───────────────────────────────────────────────
     exit_code = app.exec()
     log.info("Application exited with code %d", exit_code)
     return exit_code

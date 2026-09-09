@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # mediapipe landmark types — only used for type hints
+    # pyrefly: ignore [missing-import]
     from mediapipe.framework.formats.landmark_pb2 import NormalizedLandmark
 
 

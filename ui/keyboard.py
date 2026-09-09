@@ -14,6 +14,8 @@ Rows:
   A S D F G H J K L BS
   Z X C V B N M . , CLR
   SPACE      ENTER   EXIT
+
+All colour tokens come from ``ui.theme`` for live Dark/Light switching.
 """
 
 from __future__ import annotations
@@ -32,92 +34,101 @@ from PySide6.QtWidgets import (
 )
 
 from core.speech_engine import SpeechEngine
+from ui.theme import T, S, theme_manager
 from utils.logger import get_logger
+from utils.words import get_suggestions
 
 log = get_logger(__name__)
 
-# Palette
-BG_DARK = "#0d1117"
-BG_PANEL = "#161b22"
-BG_CARD = "#1c2128"
-BG_KEY = "#21262d"
-BG_KEY_SPECIAL = "#1f3045"
-BG_KEY_DANGER = "#3d1f1f"
-BG_KEY_SUCCESS = "#1f3d1f"
-BG_KEY_ACCENT = "#1a3050"
-ACCENT = "#00b4ff"
-TEXT_PRIMARY = "#e6edf3"
-TEXT_MUTED = "#8b949e"
-BORDER = "#30363d"
-SUCCESS = "#3fb950"
-DANGER = "#f85149"
 
-_KEY_STYLE = f"""
+def _key_style() -> str:
+    return f"""
 QPushButton {{
-    background-color: {BG_KEY};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
-    border-radius: 8px;
-    font-size: 16px;
+    background-color: {T("BG_KEY")};
+    color: {T("TEXT_PRIMARY")};
+    border: 1px solid {T("BORDER_SOLID")};
+    border-radius: {S(8)}px;
+    font-size: {S(16)}px;
     font-weight: 700;
-    min-height: 56px;
-    min-width: 54px;
+    min-height: {S(56)}px;
+    min-width: {S(54)}px;
 }}
 QPushButton:hover {{
-    background-color: {ACCENT};
-    color: #0d1117;
-    border: 2px solid {ACCENT};
+    background-color: {T("ACCENT")};
+    color: {T("KEY_HOVER_TEXT")};
+    border: 2px solid {T("ACCENT")};
 }}
 QPushButton:pressed {{
-    background-color: #0090cc;
+    background-color: {T("ACCENT_PRESSED")};
 }}
 """
 
-_SPECIAL_STYLE = f"""
+def _special_style() -> str:
+    return f"""
 QPushButton {{
-    background-color: {BG_KEY_SPECIAL};
-    color: {ACCENT};
-    border: 1px solid {ACCENT};
-    border-radius: 8px;
-    font-size: 14px;
+    background-color: {T("BG_KEY_SPECIAL")};
+    color: {T("ACCENT")};
+    border: 1px solid {T("ACCENT")};
+    border-radius: {S(8)}px;
+    font-size: {S(14)}px;
     font-weight: 700;
-    min-height: 56px;
+    min-height: {S(56)}px;
 }}
 QPushButton:hover {{
-    background-color: {ACCENT};
-    color: #0d1117;
+    background-color: {T("ACCENT")};
+    color: {T("KEY_HOVER_TEXT")};
 }}
 """
 
-_DANGER_STYLE = f"""
+def _danger_style() -> str:
+    return f"""
 QPushButton {{
-    background-color: {BG_KEY_DANGER};
-    color: {DANGER};
-    border: 1px solid {DANGER};
-    border-radius: 8px;
-    font-size: 14px;
+    background-color: {T("BG_KEY_DANGER")};
+    color: {T("DANGER")};
+    border: 1px solid {T("DANGER")};
+    border-radius: {S(8)}px;
+    font-size: {S(14)}px;
     font-weight: 700;
-    min-height: 56px;
+    min-height: {S(56)}px;
 }}
 QPushButton:hover {{
-    background-color: {DANGER};
+    background-color: {T("DANGER")};
     color: white;
 }}
 """
 
-_SUCCESS_STYLE = f"""
+def _success_style() -> str:
+    return f"""
 QPushButton {{
-    background-color: {BG_KEY_SUCCESS};
-    color: {SUCCESS};
-    border: 1px solid {SUCCESS};
-    border-radius: 8px;
-    font-size: 14px;
+    background-color: {T("BG_KEY_SUCCESS")};
+    color: {T("SUCCESS")};
+    border: 1px solid {T("SUCCESS")};
+    border-radius: {S(8)}px;
+    font-size: {S(14)}px;
     font-weight: 700;
-    min-height: 56px;
+    min-height: {S(56)}px;
 }}
 QPushButton:hover {{
-    background-color: {SUCCESS};
+    background-color: {T("SUCCESS")};
     color: white;
+}}
+"""
+
+def _suggestion_style() -> str:
+    return f"""
+QPushButton {{
+    background-color: {T("BG_PANEL")};
+    color: {T("ACCENT_HOVER")};
+    border: 1px dashed {T("ACCENT_HOVER")};
+    border-radius: {S(16)}px;
+    font-size: {S(18)}px;
+    font-weight: 600;
+    padding: {S(8)}px {S(16)}px;
+}}
+QPushButton:hover {{
+    background-color: {T("ACCENT")};
+    color: {T("KEY_HOVER_TEXT")};
+    border: 1px solid {T("ACCENT")};
 }}
 """
 
@@ -137,55 +148,62 @@ class KeyboardWidget(QWidget):
         super().__init__(parent)
         self._speech = speech
         self._text = ""
+        self._current_word = ""
+        self._key_buttons: list[QPushButton] = []
+        self._sugg_buttons: list[QPushButton] = []
         self._build_ui()
+        self._apply_theme()
+        theme_manager().theme_changed.connect(self._apply_theme)
 
     # ── UI ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(14)
+        outer.setContentsMargins(S(24), S(20), S(24), S(20))
+        outer.setSpacing(S(14))
 
         # Page title
-        title = QLabel("⌨️  Eye-Controlled Keyboard")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:20px; font-weight:700;"
-        )
-        outer.addWidget(title)
+        self._title = QLabel("⌨️  Eye-Controlled Keyboard")
+        outer.addWidget(self._title)
 
-        hint = QLabel("Hover cursor with head movement · Blink to select a key")
-        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
-        outer.addWidget(hint)
+        self._hint = QLabel("Hover cursor with head movement · Blink to select a key")
+        outer.addWidget(self._hint)
 
         # Text display area
-        text_frame = QFrame()
-        text_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:2px solid {ACCENT}; border-radius:10px;"
-        )
-        text_frame.setFixedHeight(70)
-        text_layout = QHBoxLayout(text_frame)
-        text_layout.setContentsMargins(16, 0, 16, 0)
+        self._text_frame = QFrame()
+        self._text_frame.setFixedHeight(S(70))
+        text_layout = QHBoxLayout(self._text_frame)
+        text_layout.setContentsMargins(S(16), 0, S(16), 0)
 
         self._display = QLabel("| Start typing…")
-        self._display.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:22px; font-weight:500; "
-            f"border:none; background:transparent;"
-        )
         self._display.setWordWrap(False)
         self._display.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         text_layout.addWidget(self._display)
-        outer.addWidget(text_frame)
+        outer.addWidget(self._text_frame)
 
         # Speaking status
         self._speak_lbl = QLabel("")
-        self._speak_lbl.setStyleSheet(f"color:{ACCENT}; font-size:12px; font-weight:600;")
         outer.addWidget(self._speak_lbl)
         self._speech.speaking_started.connect(lambda: self._speak_lbl.setText("🔊 Speaking…"))
         self._speech.speaking_finished.connect(lambda: self._speak_lbl.setText(""))
 
+        # Suggestions row
+        self._suggestions_layout = QHBoxLayout()
+        self._suggestions_layout.setSpacing(S(12))
+        for _ in range(4):
+            btn = QPushButton("")
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            btn.clicked.connect(self._on_suggestion_clicked)
+            btn.setVisible(False)
+            self._sugg_buttons.append(btn)
+            self._suggestions_layout.addWidget(btn)
+        
+        outer.addLayout(self._suggestions_layout)
+        outer.addSpacing(S(10))
+
         # Keyboard grid
         grid = QGridLayout()
-        grid.setSpacing(6)
+        grid.setSpacing(S(6))
 
         for row_idx, row in enumerate(self.KB_ROWS):
             for col_idx, key in enumerate(row):
@@ -193,26 +211,23 @@ class KeyboardWidget(QWidget):
                 grid.addWidget(btn, row_idx, col_idx)
 
         # Bottom row
-        btn_space = QPushButton("SPACE")
-        btn_space.setStyleSheet(_SPECIAL_STYLE)
-        btn_space.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        btn_space.clicked.connect(lambda: self._key_press("SPACE"))
+        self._btn_space = QPushButton("SPACE")
+        self._btn_space.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._btn_space.clicked.connect(lambda: self._key_press("SPACE"))
 
-        btn_enter = QPushButton("ENTER  🔊")
-        btn_enter.setStyleSheet(_SUCCESS_STYLE)
-        btn_enter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        btn_enter.clicked.connect(lambda: self._key_press("ENTER"))
+        self._btn_enter = QPushButton("ENTER  🔊")
+        self._btn_enter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._btn_enter.clicked.connect(lambda: self._key_press("ENTER"))
 
-        btn_exit = QPushButton("EXIT  ✕")
-        btn_exit.setStyleSheet(_DANGER_STYLE)
-        btn_exit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        btn_exit.clicked.connect(lambda: self._key_press("EXIT"))
+        self._btn_exit = QPushButton("EXIT  ✕")
+        self._btn_exit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._btn_exit.clicked.connect(lambda: self._key_press("EXIT"))
 
         bottom_row_layout = QHBoxLayout()
-        bottom_row_layout.setSpacing(6)
-        bottom_row_layout.addWidget(btn_space, 5)
-        bottom_row_layout.addWidget(btn_enter, 3)
-        bottom_row_layout.addWidget(btn_exit, 2)
+        bottom_row_layout.setSpacing(S(6))
+        bottom_row_layout.addWidget(self._btn_space, 5)
+        bottom_row_layout.addWidget(self._btn_enter, 3)
+        bottom_row_layout.addWidget(self._btn_exit, 2)
 
         outer.addLayout(grid)
         outer.addLayout(bottom_row_layout)
@@ -221,34 +236,107 @@ class KeyboardWidget(QWidget):
     def _make_key_btn(self, key: str) -> QPushButton:
         """Create one keyboard button."""
         btn = QPushButton(key)
-        if key in ("BS", "CLR"):
-            btn.setStyleSheet(_DANGER_STYLE)
-        else:
-            btn.setStyleSheet(_KEY_STYLE)
         btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         btn.clicked.connect(lambda checked=False, k=key: self._key_press(k))
+        # Store reference + semantic type for theme refresh
+        btn.setProperty("key_type", "danger" if key in ("BS", "CLR") else "normal")
+        self._key_buttons.append(btn)
         return btn
+
+    # ── theme application ────────────────────────────────────────
+
+    def _apply_theme(self) -> None:
+        self._title.setStyleSheet(
+            f"color:{T('TEXT_PRIMARY')}; font-size:{S(20)}px; font-weight:700;"
+        )
+        self._hint.setStyleSheet(f"color:{T('TEXT_MUTED')}; font-size:{S(12)}px;")
+        self._text_frame.setStyleSheet(
+            f"background:{T('BG_CARD')}; border:2px solid {T('ACCENT')}; border-radius:{S(10)}px;"
+        )
+        self._display.setStyleSheet(
+            f"color:{T('TEXT_PRIMARY')}; font-size:{S(22)}px; font-weight:500; "
+            f"border:none; background:transparent;"
+        )
+        self._speak_lbl.setStyleSheet(
+            f"color:{T('ACCENT')}; font-size:{S(12)}px; font-weight:600;"
+        )
+        # Key buttons
+        ks = _key_style()
+        ds = _danger_style()
+        for btn in self._key_buttons:
+            if btn.property("key_type") == "danger":
+                btn.setStyleSheet(ds)
+            else:
+                btn.setStyleSheet(ks)
+        # Bottom row
+        self._btn_space.setStyleSheet(_special_style())
+        self._btn_enter.setStyleSheet(_success_style())
+        self._btn_exit.setStyleSheet(_danger_style())
+        
+        # Suggestions
+        ss = _suggestion_style()
+        for btn in self._sugg_buttons:
+            btn.setStyleSheet(ss)
 
     # ── key handling ─────────────────────────────────────────────
 
     def _key_press(self, key: str) -> None:
         if key == "BS":
             self._text = self._text[:-1]
+            if self._current_word:
+                self._current_word = self._current_word[:-1]
+            else:
+                # Need to re-evaluate current word
+                parts = self._text.split(" ")
+                self._current_word = parts[-1] if parts else ""
         elif key == "CLR":
             self._text = ""
+            self._current_word = ""
         elif key == "SPACE":
             self._text += " "
+            self._current_word = ""
         elif key == "ENTER":
             if self._text.strip():
                 self._speech.speak(self._text)
                 log.info("Keyboard TTS: %r", self._text)
+            self._current_word = ""
         elif key == "EXIT":
             # Navigate back to dashboard — find parent MainWindow
             self._go_to_dashboard()
         else:
             self._text += key
+            # Since keyboard keys are uppercase:
+            self._current_word += key.lower()
 
         self._update_display()
+        self._update_suggestions()
+
+    def _on_suggestion_clicked(self) -> None:
+        btn = self.sender()
+        if not isinstance(btn, QPushButton):
+            return
+        word = btn.text()
+        
+        # Replace the current incomplete word with the suggestion + space
+        if self._current_word:
+            # strip off the partial word
+            self._text = self._text[:-len(self._current_word)]
+        
+        # Add the completed word (upper case for consistency or Title case)
+        self._text += word.upper() + " "
+        self._current_word = ""
+        
+        self._update_display()
+        self._update_suggestions()
+
+    def _update_suggestions(self) -> None:
+        suggestions = get_suggestions(self._current_word, max_count=4)
+        for i, btn in enumerate(self._sugg_buttons):
+            if i < len(suggestions):
+                btn.setText(suggestions[i])
+                btn.setVisible(True)
+            else:
+                btn.setVisible(False)
 
     def _update_display(self) -> None:
         display_text = self._text if self._text else ""

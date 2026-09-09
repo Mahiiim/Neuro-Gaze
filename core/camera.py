@@ -162,3 +162,13 @@ class CameraManager:
     @property
     def current_index(self) -> int:
         return self._index
+
+    def set_resolution(self, width: int, height: int) -> bool:
+        """Dynamically adjust camera resolution."""
+        if self._cap is None or not self._cap.isOpened():
+            return False
+        
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        log.info(f"Camera {self._index} resolution set to {width}x{height}")
+        return True

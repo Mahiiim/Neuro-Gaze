@@ -38,6 +38,7 @@ class MouseController:
         range_y: tuple[float, float] = (0.38, 0.62),
         sensitivity_x: float = 1.0,
         sensitivity_y: float = 1.0,
+        fatigue_mode: bool = False,
     ) -> None:
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
@@ -46,6 +47,7 @@ class MouseController:
         self.range_y = list(range_y)
         self.sensitivity_x = sensitivity_x
         self.sensitivity_y = sensitivity_y
+        self.fatigue_mode = fatigue_mode
 
         self._screen_w, self._screen_h = pyautogui.size()
         self._last_x: float | None = None
@@ -64,6 +66,7 @@ class MouseController:
         range_y: tuple[float, float] | None = None,
         sensitivity_x: float | None = None,
         sensitivity_y: float | None = None,
+        fatigue_mode: bool | None = None,
     ) -> None:
         """Hot-update configuration without restarting the tracker."""
         if alpha_min is not None:
@@ -80,6 +83,8 @@ class MouseController:
             self.sensitivity_x = sensitivity_x
         if sensitivity_y is not None:
             self.sensitivity_y = sensitivity_y
+        if fatigue_mode is not None:
+            self.fatigue_mode = fatigue_mode
 
     def enable(self) -> None:
         """Allow mouse movement and clicks."""
@@ -163,4 +168,8 @@ class MouseController:
             return target
         dist = abs(target - last)
         alpha = float(np.clip(dist * 2.0, self.alpha_min, self.alpha_max))
+        
+        if self.fatigue_mode:
+            alpha *= 0.5  # Halve the alpha to heavily increase smoothing
+            
         return last + alpha * (target - last)

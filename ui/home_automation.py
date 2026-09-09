@@ -1,109 +1,141 @@
 """
 ui/home_automation.py
----------------------
-Home Automation Control module
+----------------------
+Placeholder implementation for ESP32-based home automation relays.
+Uses ui.theme for all styling.
 """
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QGridLayout,
-    QPushButton,
+    QFrame,
+    QHBoxLayout,
     QLabel,
-    QSizePolicy
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
+import threading
+import urllib.request
+import urllib.error
+
+from PySide6.QtWidgets import QPushButton
+
 from core.speech_engine import SpeechEngine
+from ui.theme import T, S, theme_manager
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-ESP_IP = "http://192.168.4.2"
 
-class BlinkCommandButton(QPushButton):
-    def __init__(self, name, endpoint, speech: SpeechEngine, spoken_text="", color="#00D2FF", bg_color="rgba(0, 210, 255, 0.15)", parent=None):
-        super().__init__(parent)
-        self._name = name
-        self._endpoint = endpoint
-        self._speech = speech
-        self._spoken_text = spoken_text
-        self._color = color
-        self._bg_color = bg_color
-        
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMinimumHeight(120)
-        
-        self.parent_widget = parent
-        self._refresh_style()
-        self.clicked.connect(self.trigger_command)
+class ApplianceButton(QPushButton):
+    """Discrete appliance button triggered by a blink (mouse click)."""
 
-    def _refresh_style(self):
-        self.setText(self._name)
-        
+    def __init__(self, text: str, is_on: bool, is_light: bool, parent=None) -> None:
+        super().__init__(text, parent)
+        self.is_on = is_on
+        self.is_light = is_light
+        self.setMinimumHeight(S(100))
+        self._apply_style()
+
+    def _apply_style(self):
+        if self.is_on:
+            color = "#2ED573" if self.is_light else "#00D2FF"  # Green or Cyan
+        else:
+            color = "#FF4757"  # Crimson
+
         self.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self._bg_color};
-                color: {self._color};
-                border: 2px solid {self._color};
-                border-radius: 16px;
-                font-size: 24px;
-                font-weight: bold;
+            ApplianceButton {{
+                background-color: {T("BG_KEY_SPECIAL")};
+                color: {T("TEXT_PRIMARY")};
+                border: 2px solid {color};
+                border-radius: {S(12)}px;
+                font-size: {S(18)}px;
+                font-weight: 800;
             }}
-            QPushButton:hover {{
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 2px solid #FFFFFF;
-                color: #FFFFFF;
+            ApplianceButton:hover {{
+                background-color: {color};
+                color: {T("KEY_HOVER_TEXT")};
             }}
         """)
 
-    def trigger_command(self):
-        if self._spoken_text and self._speech:
-            self._speech.speak(self._spoken_text)
-        if self.parent_widget:
-            self.parent_widget.send_command(self._endpoint)
-
 
 class HomeAutomationWidget(QWidget):
-    def __init__(self, speech: SpeechEngine, parent=None):
+    def __init__(self, speech: SpeechEngine, parent=None) -> None:
         super().__init__(parent)
         self._speech = speech
-        self._net_manager = QNetworkAccessManager(self)
+        self._buttons = []
         self._build_ui()
+        self._apply_theme()
+        theme_manager().theme_changed.connect(self._apply_theme)
 
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(20)
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(S(32), S(24), S(32), S(24))
+        outer.setSpacing(S(24))
 
-        title = QLabel("Home Automation")
-        title.setStyleSheet("color: white; font-size: 28px; font-weight: bold;")
-        layout.addWidget(title)
-        
-        instructions = QLabel("How to use: Move your cursor by pointing your nose. Look at a button below and deliberately BLINK to activate it.")
-        instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #A0B2C6; font-size: 20px; margin-bottom: 20px;")
-        layout.addWidget(instructions)
-        
-        grid = QGridLayout()
-        grid.setSpacing(20)
-        
-        self.btn_light_on = BlinkCommandButton("💡 Light ON", "/home/light_on", self._speech, "Light on", color="#2ED573", bg_color="rgba(46, 213, 115, 0.15)", parent=self)
-        self.btn_light_off = BlinkCommandButton("💡 Light OFF", "/home/light_off", self._speech, "Light off", color="#FF4757", bg_color="rgba(255, 71, 87, 0.15)", parent=self)
-        
-        self.btn_fan_on = BlinkCommandButton("🌀 Fan ON", "/home/fan_on", self._speech, "Fan on", color="#2ED573", bg_color="rgba(46, 213, 115, 0.15)", parent=self)
-        self.btn_fan_off = BlinkCommandButton("🌀 Fan OFF", "/home/fan_off", self._speech, "Fan off", color="#FF4757", bg_color="rgba(255, 71, 87, 0.15)", parent=self)
-        
-        grid.addWidget(self.btn_light_on, 0, 0)
-        grid.addWidget(self.btn_light_off, 0, 1)
-        grid.addWidget(self.btn_fan_on, 1, 0)
-        grid.addWidget(self.btn_fan_off, 1, 1)
-        
-        layout.addLayout(grid)
-        layout.addStretch(1)
+        self._title = QLabel("💡  Home Automation (Simulated)")
+        outer.addWidget(self._title)
 
-    def send_command(self, endpoint):
-        req = QNetworkRequest(QUrl(f"{ESP_IP}{endpoint}"))
-        self._net_manager.get(req)
-        log.info(f"Home Automation command sent: {endpoint}")
+        self._hint = QLabel("Hover and blink to toggle appliances in the room.")
+        outer.addWidget(self._hint)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(S(16))
+        row1.addWidget(self._make_btn("💡 Light ON", True, True))
+        row1.addWidget(self._make_btn("🌑 Light OFF", False, True))
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(S(16))
+        row2.addWidget(self._make_btn("🌀 Fan ON", True, False))
+        row2.addWidget(self._make_btn("⏹️ Fan OFF", False, False))
+
+        outer.addLayout(row1)
+        outer.addLayout(row2)
+        outer.addStretch(1)
+
+        self._status = QLabel("Relay Module: Awaiting commands")
+        outer.addWidget(self._status, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def _make_btn(self, label: str, is_on: bool, is_light: bool) -> ApplianceButton:
+        btn = ApplianceButton(label, is_on, is_light)
+        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        btn.clicked.connect(lambda checked, l=label: self._trigger_appliance(l))
+        self._buttons.append(btn)
+        return btn
+
+    def _trigger_appliance(self, label: str) -> None:
+        log.info("Appliance action: %s", label)
+        
+        spoken = label.replace("💡 ", "").replace("🌑 ", "").replace("🌀 ", "").replace("⏹️ ", "")
+        self._speech.speak(f"{spoken}")
+        self._status.setText(f"Last command: {label}")
+        
+        endpoint_map = {
+            "💡 Light ON": "light_on",
+            "🌑 Light OFF": "light_off",
+            "🌀 Fan ON": "fan_on",
+            "⏹️ Fan OFF": "fan_off"
+        }
+        
+        action = endpoint_map.get(label, "")
+        if action:
+            url = f"http://192.168.4.1/home/{action}"
+            def _fetch():
+                try:
+                    urllib.request.urlopen(url, timeout=2.0)
+                except Exception:
+                    pass
+            threading.Thread(target=_fetch, daemon=True).start()
+
+    def _apply_theme(self) -> None:
+        self._title.setStyleSheet(
+            f"color:{T('TEXT_PRIMARY')}; font-size:{S(20)}px; font-weight:700;"
+        )
+        self._hint.setStyleSheet(f"color:{T('TEXT_MUTED')}; font-size:{S(13)}px;")
+        self._status.setStyleSheet(f"color:{T('WARNING')}; font-size:{S(12)}px;")
+        for btn in self._buttons:
+            btn._apply_style()

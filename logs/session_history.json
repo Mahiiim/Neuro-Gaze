@@ -1,0 +1,364 @@
+[
+  {
+    "start_time": "2026-09-07T15:22:02.288433",
+    "end_time": "2026-09-07T15:30:54.628458",
+    "duration_seconds": 532.34,
+    "events": [
+      {
+        "timestamp": "2026-09-07T15:22:05.394543",
+        "type": "STARTUP",
+        "details": "Application started"
+      },
+      {
+        "timestamp": "2026-09-07T15:27:45.717914",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      },
+      {
+        "timestamp": "2026-09-07T15:27:49.057627",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      },
+      {
+        "timestamp": "2026-09-07T15:27:52.455573",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      },
+      {
+        "timestamp": "2026-09-07T15:27:55.656218",
+        "type": "EMERGENCY",
+        "details": "Patient Emergency Alert Triggered"
+      },
+      {
+        "timestamp": "2026-09-07T15:29:03.982679",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      },
+      {
+        "timestamp": "2026-09-07T15:29:09.796388",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-07T15:31:05.700076",
+    "end_time": "2026-09-07T15:31:35.166243",
+    "duration_seconds": 29.47,
+    "events": [
+      {
+        "timestamp": "2026-09-07T15:31:08.065714",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-07T16:06:34.970380",
+    "end_time": "2026-09-07T16:08:38.571748",
+    "duration_seconds": 123.6,
+    "events": [
+      {
+        "timestamp": "2026-09-07T16:06:39.063663",
+        "type": "STARTUP",
+        "details": "Application started"
+      },
+      {
+        "timestamp": "2026-09-07T16:07:09.577730",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      },
+      {
+        "timestamp": "2026-09-07T16:07:21.514031",
+        "type": "EMERGENCY",
+        "details": "Patient Emergency Alert Triggered"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-07T16:14:09.327411",
+    "end_time": "2026-09-07T16:15:46.799824",
+    "duration_seconds": 97.47,
+    "events": [
+      {
+        "timestamp": "2026-09-07T16:14:12.725216",
+        "type": "STARTUP",
+        "details": "Application started"
+      },
+      {
+        "timestamp": "2026-09-07T16:15:18.925052",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-07T16:33:51.869271",
+    "end_time": "2026-09-07T16:35:20.269295",
+    "duration_seconds": 88.4,
+    "events": [
+      {
+        "timestamp": "2026-09-07T16:33:54.739380",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:15:28.012262",
+    "end_time": "2026-09-08T09:15:46.398141",
+    "duration_seconds": 18.39,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:15:36.710432",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:16:14.411825",
+    "end_time": "2026-09-08T09:16:49.268918",
+    "duration_seconds": 34.86,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:16:21.097027",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:29:33.676764",
+    "end_time": "2026-09-08T09:29:47.497298",
+    "duration_seconds": 13.82,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:29:38.138106",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:30:09.493392",
+    "end_time": "2026-09-08T09:36:51.724371",
+    "duration_seconds": 402.23,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:30:17.009848",
+        "type": "STARTUP",
+        "details": "Application started"
+      },
+      {
+        "timestamp": "2026-09-08T09:31:54.438094",
+        "type": "PING",
+        "details": "Caregiver ping triggered"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:37:30.310111",
+    "end_time": "2026-09-08T09:37:41.083668",
+    "duration_seconds": 10.77,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:37:36.178547",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T09:48:30.753366",
+    "end_time": "2026-09-08T09:49:25.096499",
+    "duration_seconds": 54.34,
+    "events": [
+      {
+        "timestamp": "2026-09-08T09:48:37.567132",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T10:35:05.059520",
+    "end_time": "2026-09-08T10:36:35.536058",
+    "duration_seconds": 90.48,
+    "events": [
+      {
+        "timestamp": "2026-09-08T10:35:13.384175",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T10:37:01.313969",
+    "end_time": "2026-09-08T10:37:57.321401",
+    "duration_seconds": 56.01,
+    "events": [
+      {
+        "timestamp": "2026-09-08T10:37:05.572002",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T10:58:39.474547",
+    "end_time": "2026-09-08T11:00:41.317503",
+    "duration_seconds": 121.84,
+    "events": [
+      {
+        "timestamp": "2026-09-08T10:58:44.392982",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T11:04:52.656044",
+    "end_time": "2026-09-08T11:07:57.716100",
+    "duration_seconds": 185.06,
+    "events": [
+      {
+        "timestamp": "2026-09-08T11:04:57.220408",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T11:15:32.647048",
+    "end_time": "2026-09-08T11:16:05.087643",
+    "duration_seconds": 32.44,
+    "events": [
+      {
+        "timestamp": "2026-09-08T11:15:37.365736",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T13:06:00.581061",
+    "end_time": "2026-09-08T13:08:23.437666",
+    "duration_seconds": 142.86,
+    "events": [
+      {
+        "timestamp": "2026-09-08T13:06:06.667686",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T13:10:11.454047",
+    "end_time": "2026-09-08T13:12:19.794378",
+    "duration_seconds": 128.34,
+    "events": [
+      {
+        "timestamp": "2026-09-08T13:10:16.792546",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T13:18:34.384173",
+    "end_time": "2026-09-08T13:20:54.274019",
+    "duration_seconds": 139.89,
+    "events": [
+      {
+        "timestamp": "2026-09-08T13:18:40.673476",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T14:41:40.067402",
+    "end_time": "2026-09-08T14:41:48.340877",
+    "duration_seconds": 8.27,
+    "events": [
+      {
+        "timestamp": "2026-09-08T14:41:44.856692",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T14:41:32.680713",
+    "end_time": "2026-09-08T14:41:59.711119",
+    "duration_seconds": 27.03,
+    "events": [
+      {
+        "timestamp": "2026-09-08T14:41:43.215518",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T14:42:07.690547",
+    "end_time": "2026-09-08T14:42:47.273255",
+    "duration_seconds": 39.58,
+    "events": [
+      {
+        "timestamp": "2026-09-08T14:42:13.340514",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T14:43:58.387341",
+    "end_time": "2026-09-08T14:44:24.230333",
+    "duration_seconds": 25.84,
+    "events": [
+      {
+        "timestamp": "2026-09-08T14:44:02.319414",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T23:11:44.875184",
+    "end_time": "2026-09-08T23:14:53.616515",
+    "duration_seconds": 188.74,
+    "events": [
+      {
+        "timestamp": "2026-09-08T23:11:52.062193",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-08T23:32:31.512540",
+    "end_time": "2026-09-08T23:32:47.940520",
+    "duration_seconds": 16.43,
+    "events": [
+      {
+        "timestamp": "2026-09-08T23:32:38.667254",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  },
+  {
+    "start_time": "2026-09-09T12:52:08.427016",
+    "end_time": "2026-09-09T12:59:31.978078",
+    "duration_seconds": 443.55,
+    "events": [
+      {
+        "timestamp": "2026-09-09T12:52:18.547753",
+        "type": "STARTUP",
+        "details": "Application started"
+      }
+    ]
+  }
+]
