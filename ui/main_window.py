@@ -38,6 +38,7 @@ from core.face_tracker import FaceTrackerWorker
 from core.speech_engine import SpeechEngine
 from core.webhook import CaregiverNotifier
 from core.session import session_logger
+from core.audio_synth import AudioSynth
 from ui.about import AboutWidget
 from ui.dashboard import DashboardWidget
 from ui.keyboard import KeyboardWidget
@@ -47,6 +48,7 @@ from ui.wheelchair import WheelchairWidget
 from ui.home_automation import HomeAutomationWidget
 from ui.calibration import CalibrationWizardWidget
 from ui.tutorial import TutorialOverlay
+from ui.entertainment import EntertainmentWidget
 from ui.theme import T, S, theme_manager, hex_to_rgba
 from utils.config import Config
 from utils.logger import get_logger
@@ -149,12 +151,14 @@ class MainWindow(QMainWindow):
     PAGE_SETTINGS = 5
     PAGE_ABOUT = 6
     PAGE_CALIBRATION = 7
+    PAGE_ENTERTAINMENT = 8
 
     def __init__(self, config: Config, tracker: FaceTrackerWorker, speech: SpeechEngine) -> None:
         super().__init__()
         self._config = config
         self._tracker = tracker
         self._speech = speech
+        self._audio = AudioSynth()
 
         self.setWindowTitle("Neuro-Gaze — Eye-Controlled Assistive Ecosystem")
         self.setMinimumSize(1100, 720)
@@ -338,6 +342,7 @@ class MainWindow(QMainWindow):
             ("💡  Home Automation", self.PAGE_HOME),
             ("⌨️  Eye Keyboard", self.PAGE_KEYBOARD),
             ("💬  Quick Phrases", self.PAGE_PHRASES),
+            ("🎮  Entertainment", self.PAGE_ENTERTAINMENT),
             ("⚙️  Settings", self.PAGE_SETTINGS),
             ("🎯  Calibration", self.PAGE_CALIBRATION),
             ("ℹ️  About", self.PAGE_ABOUT),
@@ -370,6 +375,7 @@ class MainWindow(QMainWindow):
         self._calibration = CalibrationWizardWidget(self._config, self._tracker)
         self._about = AboutWidget()
         self._about.launch_tutorial_requested.connect(self._launch_tutorial)
+        self._entertainment = EntertainmentWidget(tracker=self._tracker, speech=self._speech, audio=self._audio)
 
         self._pages.addWidget(self._dashboard)         # 0
         self._pages.addWidget(self._wheelchair)        # 1
@@ -379,6 +385,7 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._settings)          # 5
         self._pages.addWidget(self._about)             # 6
         self._pages.addWidget(self._calibration)       # 7
+        self._pages.addWidget(self._entertainment)     # 8
 
         self._navigate(self.PAGE_DASHBOARD)
         return self._pages
@@ -594,7 +601,7 @@ class MainWindow(QMainWindow):
         # Toggle PiP visibility (guard needed: first _navigate call
         # happens inside _build_pages before _build_pip_overlay runs)
         if hasattr(self, '_pip_container'):
-            if page_idx == self.PAGE_DASHBOARD:
+            if page_idx in (self.PAGE_DASHBOARD, self.PAGE_ENTERTAINMENT, self.PAGE_SETTINGS):
                 self._pip_container.hide()
             else:
                 self._pip_container.show()
@@ -800,5 +807,7 @@ class MainWindow(QMainWindow):
         self._tracker.stop_tracking()
         self._tracker.stop_thread()
         self._tracker.wait(3000)
+        if hasattr(self, '_audio') and self._audio:
+            self._audio.close()
         self._config.save()
         event.accept()

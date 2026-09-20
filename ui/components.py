@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QPushButton, QStackedWidget, QGraphicsOpacityEffect
 
 from ui.theme import T, S
 
@@ -77,3 +77,49 @@ class DwellButton(QPushButton):
             w = int(self.width() * (self._progress / 100.0))
             painter.drawRoundedRect(0, 0, w, self.height(), S(12), S(12))
             painter.end()
+
+
+class FadingStackedWidget(QStackedWidget):
+    """
+    A QStackedWidget that performs a smooth opacity crossfade when the index changes.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._fade_duration = 200
+        self._next_index = -1
+        
+        self._effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._effect)
+        
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(self._fade_duration)
+        self._anim.valueChanged.connect(self._effect.setOpacity)
+        self._anim.finished.connect(self._on_anim_finished)
+        
+        self._state = 'idle'
+
+    def setCurrentIndex(self, index: int) -> None:
+        if index == self.currentIndex() or self._state != 'idle':
+            return
+            
+        self._state = 'fading_out'
+        self._next_index = index
+        
+        self._anim.setStartValue(1.0)
+        self._anim.setEndValue(0.0)
+        self._anim.start()
+
+    def _on_anim_finished(self):
+        if self._state == 'fading_out':
+            if self._next_index != -1:
+                super().setCurrentIndex(self._next_index)
+                self._next_index = -1
+                
+            self._state = 'fading_in'
+            self._anim.setStartValue(0.0)
+            self._anim.setEndValue(1.0)
+            self._anim.start()
+            
+        elif self._state == 'fading_in':
+            self._state = 'idle'

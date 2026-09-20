@@ -1,18 +1,3 @@
-"""
-main.py
---------
-Neuro-Gaze — Eye-Controlled Assistive Communication System
-Entry point and startup sequence.
-
-Startup order:
-  1. Load configuration
-  2. Check / download MediaPipe model
-  3. Initialise SpeechEngine (TTS)
-  4. Construct FaceTrackerWorker (QThread)
-  5. Show MainWindow
-  6. Start the tracker thread (camera opens inside the thread)
-  7. Enter Qt event loop
-"""
 
 import sys
 import os
@@ -21,6 +6,7 @@ import os
 from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog, QSplashScreen
 # pyrefly: ignore [missing-import]
 from PySide6.QtCore import Qt, QThread, Signal
+
 # pyrefly: ignore [missing-import]
 from PySide6.QtGui import QFont, QPixmap
 

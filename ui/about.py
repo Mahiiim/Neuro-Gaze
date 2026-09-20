@@ -55,7 +55,7 @@ class GlowCard(QFrame):
         path.addRoundedRect(rect, S(12), S(12))
 
         # Base semi-translucent obsidian glass background
-        painter.fillPath(path, QColor(16, 31, 48, 165)) # rgba(16, 31, 48, 0.65)
+        painter.fillPath(path, QColor(T("BG_PANEL")).toRgb()) # rgba(16, 31, 48, 0.65)
 
         # Mouse tracking radial gradient
         if self._mouse_pos.x() > -1000:
@@ -215,7 +215,7 @@ class AboutWidget(QWidget):
         # Drop shadow for pulse
         self.logo_shadow = QGraphicsDropShadowEffect()
         self.logo_shadow.setBlurRadius(25)
-        c = QColor("#00F5D4")
+        c = QColor(T("ACCENT_HOVER"))
         c.setAlphaF(0.35)
         self.logo_shadow.setColor(c)
         self.logo_shadow.setOffset(0, 0)
@@ -255,7 +255,7 @@ class AboutWidget(QWidget):
         # Give title a text-shadow equivalent using QGraphicsDropShadowEffect
         title_shadow = QGraphicsDropShadowEffect()
         title_shadow.setBlurRadius(10)
-        c2 = QColor("#00D2FF")
+        c2 = QColor(T("ACCENT"))
         c2.setAlphaF(0.4)
         title_shadow.setColor(c2)
         title_shadow.setOffset(0, 0)
@@ -373,8 +373,8 @@ class AboutWidget(QWidget):
         # Deep slate radial gradient #060B10 to #0F1E2E
         painter = QPainter(self)
         grad = QRadialGradient(self.width() / 2, self.height() / 2, self.width())
-        grad.setColorAt(0, QColor("#0F1E2E"))
-        grad.setColorAt(1, QColor("#060B10"))
+        grad.setColorAt(0, QColor(T("BG_PANEL")))
+        grad.setColorAt(1, QColor(T("BG_DARK")))
         painter.fillRect(self.rect(), grad)
 
     def _apply_theme(self) -> None:
