@@ -9,8 +9,8 @@ interactive glow mechanics, staggered entrance transitions, and animated metrics
 from __future__ import annotations
 
 import math
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, QPoint, QRect, QEvent, Signal
-from PySide6.QtGui import QPainter, QColor, QRadialGradient, QBrush, QPen, QPainterPath, QPixmap, QFont
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, QPoint, QRect, QEvent, Signal, QUrl
+from PySide6.QtGui import QPainter, QColor, QRadialGradient, QBrush, QPen, QPainterPath, QPixmap, QFont, QDesktopServices
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, 
     QGraphicsOpacityEffect, QGridLayout, QPushButton, QSizePolicy, QApplication, QGraphicsDropShadowEffect,
@@ -338,17 +338,18 @@ class AboutWidget(QWidget):
 
         layout.addLayout(dev_grid)
 
-        # Email Display
-        self.lbl_email = QLabel("📧 mohaiminul118@gmail.com")
-        self.lbl_email.setStyleSheet(f"color: {T('ACCENT')}; font-size: {S(14)}px; font-weight: bold; background: {hex_to_rgba(T('ACCENT'), 0.1)}; border: 1px solid {T('ACCENT')}; padding: {S(10)}px; border-radius: {S(8)}px;")
-        self.lbl_email.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_email.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.lbl_email)
+        # Project Repository Link
+        self.lbl_repo = QLabel("🌐 github.com/Mahiiim/Neuro-Gaze")
+        self.lbl_repo.setStyleSheet(f"color: {T('ACCENT')}; font-size: {S(13)}px; font-weight: bold; background: {hex_to_rgba(T('ACCENT'), 0.1)}; border: 1px solid {T('ACCENT')}; padding: {S(10)}px; border-radius: {S(8)}px;")
+        self.lbl_repo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_repo.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.lbl_repo)
 
         # Docs Button
-        btn_docs = QPushButton("📄 System Documentation ↗")
+        btn_docs = QPushButton("📄 GitHub Repository & Documentation ↗")
         btn_docs.setStyleSheet(f"background: {hex_to_rgba('#FFFFFF', 0.05)}; border: 1px solid {hex_to_rgba('#FFFFFF', 0.2)}; color: {T('TEXT_PRIMARY')}; padding: {S(10)}px; border-radius: {S(8)}px; font-weight: bold;")
         btn_docs.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_docs.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/Mahiiim/Neuro-Gaze")))
         layout.addWidget(btn_docs)
 
         layout.addStretch(1)

@@ -1,10 +1,30 @@
+# Virtual environment
 venv/
+env/
+ENV/
+
+# Python cache
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# PyInstaller / Build
 dist/
 build/
 *.spec.bak
+
+# IDE & Editors
 .idea/
 .vscode/
-*.egg-info/
+*.swp
+*.swo
+
+# Runtime logs
+logs/*.log
+*.log
+
+# Environment variables and secrets
+.env
+.env.*
+*.local
