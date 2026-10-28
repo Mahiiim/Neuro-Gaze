@@ -13,7 +13,8 @@ class GlowingLogo(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(200, 200)
-        self.pixmap = QPixmap("assets/logo.jpg")
+        from utils.resource import resource_path
+        self.pixmap = QPixmap(resource_path("assets/logo.jpg"))
         # Ensure smooth scaling for logo
         self.pixmap = self.pixmap.scaled(160, 160, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self._glow_radius = 0

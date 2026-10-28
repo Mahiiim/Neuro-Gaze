@@ -16,6 +16,7 @@ Notes:
   - PySide6 Qt plugins are collected automatically via collect_all()
 """
 
+import os
 import sys
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
@@ -24,6 +25,9 @@ pyside6_datas, pyside6_binaries, pyside6_hiddenimports = collect_all("PySide6")
 mp_datas, mp_binaries, mp_hiddenimports = collect_all("mediapipe")
 
 block_cipher = None
+
+# SPECPATH is provided by PyInstaller (directory containing this spec)
+ICON_PATH = os.path.join(SPECPATH, "assets", "app_icon.ico")
 
 a = Analysis(
     ["main.py"],
@@ -76,7 +80,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,                   # No console window
-    icon="assets/app_icon.ico" if sys.platform == "win32" else None,
+    icon=ICON_PATH if sys.platform == "win32" else None,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

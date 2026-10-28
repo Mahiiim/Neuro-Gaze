@@ -222,7 +222,8 @@ class AboutWidget(QWidget):
         
         logo_lbl = QLabel(logo_container)
         logo_lbl.setFixedSize(S(100), S(100))
-        pix = QPixmap("assets/logo.jpg").scaled(S(100), S(100), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        from utils.resource import resource_path
+        pix = QPixmap(resource_path("assets/logo.jpg")).scaled(S(100), S(100), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         # Create circular mask
         mask = QPixmap(S(100), S(100))
         mask.fill(Qt.GlobalColor.transparent)

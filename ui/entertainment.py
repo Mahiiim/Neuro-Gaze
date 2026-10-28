@@ -2614,6 +2614,30 @@ class MusicView(QWidget):
             }
         ]
         
+        # Resolve asset paths absolutely (works from exe / any working dir)
+        from utils.resource import resource_path
+        songs_dir = resource_path(os.path.join("assets", "music", "songs"))
+        try:
+            song_files = os.listdir(songs_dir)
+        except OSError:
+            song_files = []
+
+        def _resolve_song(src: str, title: str) -> str:
+            p = resource_path(src)
+            if os.path.isfile(p):
+                return p
+            # Fallback: match by keyword in the real filename (handles unicode names)
+            key = title.split(" ft.")[0].lower()
+            for f in song_files:
+                if key in f.lower():
+                    return os.path.join(songs_dir, f)
+            return p
+
+        for cat in self.library:
+            for t in cat["tracks"]:
+                t["src"] = _resolve_song(t["src"], t["title"])
+                t["cover"] = resource_path(t["cover"])
+
         self.flat_playlist = []
         for cat in self.library:
             self.flat_playlist.extend(cat["tracks"])
@@ -2978,3 +3002,10 @@ class EntertainmentWidget(QWidget):
         ActivityLifecycleManager().stop_all(self._audio, self._speech)
         if self._audio: self._audio.ui_click()
         self._stack.setCurrentIndex(idx)
+
+    def hideEvent(self, event) -> None:
+        # Leaving the Entertainment page (e.g. to Wheelchair Drive) resets to the main hub
+        super().hideEvent(event)
+        if not event.spontaneous() and self._stack.currentIndex() != 0:
+            ActivityLifecycleManager().stop_all(self._audio, self._speech)
+            self._stack.setCurrentIndex(0)

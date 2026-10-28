@@ -34,7 +34,8 @@ def main() -> int:
     app.setApplicationVersion("2.0")
     
     from PySide6.QtGui import QIcon
-    app.setWindowIcon(QIcon("assets/app_icon.ico"))
+    from utils.resource import resource_path
+    app.setWindowIcon(QIcon(resource_path("assets/app_icon.ico")))
 
     # Global font
     font = QFont("Segoe UI", 10)

@@ -299,7 +299,8 @@ class MainWindow(QMainWindow):
 
         # Logo
         logo_label = QLabel()
-        logo_pixmap = QPixmap("assets/logo.jpg")
+        from utils.resource import resource_path
+        logo_pixmap = QPixmap(resource_path("assets/logo.jpg"))
         logo_label.setPixmap(logo_pixmap.scaled(S(40), S(40), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         layout.addWidget(logo_label)
         layout.addSpacing(S(12))
